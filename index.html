@@ -22,15 +22,15 @@ html,body{height:100%;font-family:'Inter',sans-serif;background:var(--bg);color:
 /* ═══════════════════════════════════════
    PAGES (show/hide)
 ═══════════════════════════════════════ */
-.page{display:none}
+.page{display:none;position:relative}
 .page.active{display:flex;flex-direction:column;min-height:100vh;animation:fadeIn .25s ease}
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 
 /* ═══════════════════════════════════════
    LOGIN PAGE
 ═══════════════════════════════════════ */
-#pg-login{display:grid;grid-template-columns:1fr 1fr;min-height:100vh}
-#pg-login.active{display:grid}
+#pg-login{display:grid;grid-template-columns:1fr 1fr;min-height:100vh;position:fixed;inset:0;z-index:1000;background:#fff}
+#pg-login.active{display:grid;position:fixed;inset:0;z-index:1000;background:#fff}
 @media(max-width:768px){#pg-login{grid-template-columns:1fr}}
 
 .login-brand{background:var(--brand);position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:60px 48px}
@@ -435,7 +435,7 @@ label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-trans
 <!-- ═══════════════════════════════════════
      APP (Dashboard + modules)
 ═══════════════════════════════════════ -->
-<div id="pg-app" class="page">
+<div id="pg-app" class="page" style="display:none">
   <!-- SIDEBAR -->
   <aside class="sidebar">
     <div class="sb-head">
@@ -976,8 +976,13 @@ let APP = {
    NAVIGATION
 ═══════════════════════════════════════ */
 function showPage(id){
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.page').forEach(p=>{
+    p.classList.remove('active');
+    p.style.display='none';
+  });
+  const el=document.getElementById(id);
+  el.classList.add('active');
+  el.style.display=id==='pg-login'?'grid':'flex';
 }
 
 function nav(section){
@@ -1672,6 +1677,7 @@ function analyzeBC(){
   document.getElementById('bc-accept-btn').disabled=errors>0;
   document.getElementById('bc-result').style.display='block';
 }
+
 /* ═══════════════════════════════════════
    COMPTES ADMIN
 ═══════════════════════════════════════ */
