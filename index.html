@@ -983,6 +983,59 @@ label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-trans
         </div>
       </div>
 
+      <!-- SECTION : LISTE DES FACTURES -->
+      <div class="section" id="sec-factures-list">
+        <div style="display:flex;gap:10px;margin-bottom:18px;align-items:center;flex-wrap:wrap">
+          <div class="search-wrap" style="flex:1;min-width:200px;margin:0">
+            <span class="s-ic">🔍</span>
+            <input type="text" id="fl-search" placeholder="Rechercher une facture…" oninput="renderFacturesList()">
+          </div>
+          <select id="fl-filter" onchange="renderFacturesList()" style="padding:9px 14px;border:1.5px solid var(--line);border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;outline:none;background:#fff">
+            <option value="">Tous les statuts</option>
+            <option value="emise">Émise</option>
+            <option value="payee">Payée</option>
+            <option value="retard">En retard</option>
+            <option value="annulee">Annulée</option>
+          </select>
+          <button class="btn primary" onclick="nav('facture')">＋ Nouvelle facture</button>
+        </div>
+
+        <!-- KPIs -->
+        <div class="kpi-grid" style="margin-bottom:18px">
+          <div class="kpi blue"   style="margin:0"><div class="kpi-ic">🧾</div><div class="kpi-lbl">Total factures</div><div class="kpi-val" id="fl-total">0</div></div>
+          <div class="kpi green"  style="margin:0"><div class="kpi-ic">✅</div><div class="kpi-lbl">Payées</div><div class="kpi-val" id="fl-payees">0</div></div>
+          <div class="kpi amber"  style="margin:0"><div class="kpi-ic">⏳</div><div class="kpi-lbl">En attente</div><div class="kpi-val" id="fl-attente">0</div></div>
+          <div class="kpi violet" style="margin:0"><div class="kpi-ic">💰</div><div class="kpi-lbl">Total net à payer (DT)</div><div class="kpi-val" id="fl-total-amt">0</div></div>
+        </div>
+
+        <div class="card">
+          <div class="card-h">
+            <div class="card-h-l"><div class="cdot"></div><h2>Toutes les factures</h2></div>
+            <span id="fl-count" style="font-size:12px;font-weight:700;color:var(--muted)">0 factures</span>
+          </div>
+          <div class="card-b" style="padding:0">
+            <table class="tbl" id="fl-table">
+              <thead><tr>
+                <th>Référence</th>
+                <th>Client</th>
+                <th>Commercial</th>
+                <th>Date</th>
+                <th>Devis lié</th>
+                <th>Net à payer (DT)</th>
+                <th>Statut</th>
+                <th>Actions</th>
+              </tr></thead>
+              <tbody id="fl-body"></tbody>
+            </table>
+            <div id="fl-empty" class="empty" style="display:none">
+              <div class="empty-ic">🧾</div>
+              <b>Aucune facture trouvée</b>
+              Créez votre première facture en cliquant sur "+ Nouvelle facture"
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- SECTION : BON DE COMMANDE -->
       <div class="section" id="sec-bc">
         <div style="display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start">
@@ -1189,6 +1242,7 @@ function nav(section){
   if(section==='dash-admin') { loadObjectif(); }
   if(section==='devis-list') renderDevisList();
   if(section==='brouillons') renderBrouillons();
+  if(section==='factures-list') renderFacturesList();
   if(section==='dash-com') setTimeout(()=>{document.getElementById('com-prog-bar').style.width='64%'},300);
 }
 
@@ -1223,7 +1277,8 @@ function buildSidebar(){
     {nav:'devis',    ic:'📄', lbl: isAdmin ? 'Nouveau Devis' : 'Nouveau Devis'},
     {nav:'devis-list',ic:'📋', lbl: isAdmin ? 'Liste des Devis' : 'Mes Devis'},
     {nav:'brouillons', ic:'💾', lbl:'Brouillons'},
-    {nav:'facture',  ic:'🧾', lbl: isAdmin ? 'Factures' : 'Mes Factures'},
+    {nav:'factures-list', ic:'🧾', lbl: isAdmin ? 'Factures' : 'Mes Factures'},
+    {nav:'facture',       ic:'➕', lbl: 'Nouvelle Facture'},
     {nav:'bc',       ic:'📋', lbl:'Bons de commande'},
     {nav:'catalogue',ic:'📦', lbl:'Catalogue'},
     ...(isAdmin ? [
@@ -1900,6 +1955,189 @@ function copyText(id){navigator.clipboard.writeText(document.getElementById(id).
 /* ═══════════════════════════════════════
    MONTANT EN LETTRES
 ═══════════════════════════════════════ */
+/* ═══════════════════════════════════════
+   LISTE DES FACTURES
+═══════════════════════════════════════ */
+function getAllFactures() {
+  // Factures démo
+  const demo = [
+    {id:1, ref:'FACT-2026-001', client_nom:'DataCore SARL',  client_email:'contact@datacore.tn',  commercial:'Aziz Chelly',   date:'2026-06-02', devis_ref:'DEV-2026-001', net:46600,  statut:'payee',   lines:[{service:'Développement ERP sur mesure',qty:1,price:35000},{service:'Formation DevOps',qty:5,price:600}], mode:'Virement bancaire', mf:'1234567/A', tel:'+216 74 000 000', adr:'Tunis, Tunisie'},
+    {id:2, ref:'FACT-2026-002', client_nom:'FinTech TN',     client_email:'sara@fintechtn.com',   commercial:'Aziz Chelly',   date:'2026-06-06', devis_ref:'DEV-2026-002', net:28120,  statut:'emise',   lines:[{service:'Migration cloud AWS',qty:1,price:8200},{service:'Infogérance mensuelle',qty:12,price:1200}], mode:'Virement bancaire', mf:'', tel:'', adr:''},
+    {id:3, ref:'FACT-2026-003', client_nom:'BTP Conseil',    client_email:'karim@btpconseil.tn',  commercial:'Aziz Chelly',   date:'2026-06-09', devis_ref:'DEV-2026-003', net:29680,  statut:'retard',  lines:[{service:'Développement portail web',qty:1,price:4900},{service:'Conseil & Audit SI',qty:20,price:950}], mode:'Chèque', mf:'', tel:'', adr:''},
+    {id:4, ref:'FACT-2026-004', client_nom:'SudTech SARL',   client_email:'ali@sudtech.tn',       commercial:'Aziz Chelly',   date:'2026-06-11', devis_ref:'DEV-2026-004', net:7900,   statut:'annulee', lines:[{service:'Audit cybersécurité',qty:1,price:3500},{service:'Formation Cybersécurité',qty:5,price:450}], mode:'Virement bancaire', mf:'', tel:'', adr:''},
+    {id:5, ref:'FACT-2026-005', client_nom:'DataCore SARL',  client_email:'contact@datacore.tn',  commercial:'Youssef Khazri',date:'2026-06-16', devis_ref:'DEV-2026-006', net:56800,  statut:'emise',   lines:[{service:'Migration cloud AWS',qty:1,price:8200},{service:'Infogérance mensuelle',qty:24,price:1200},{service:'Conseil & Audit SI',qty:10,price:950}], mode:'Virement bancaire', mf:'1234567/A', tel:'+216 74 000 000', adr:'Tunis'},
+    {id:6, ref:'FACT-2026-006', client_nom:'MediaPlus',      client_email:'rym@mediaplus.tn',     commercial:'Youssef Khazri',date:'2026-06-20', devis_ref:'DEV-2026-005', net:10720,  statut:'payee',   lines:[{service:'Développement mobile',qty:1,price:6500},{service:'Maintenance corrective',qty:2,price:800}], mode:'Virement bancaire', mf:'', tel:'', adr:''},
+  ];
+
+  // Fusionner avec factures sauvegardées
+  const saved = JSON.parse(localStorage.getItem('sf_factures_list') || '[]');
+  const refs = new Set(saved.map(f=>f.ref));
+  return [...demo.filter(f=>!refs.has(f.ref)), ...saved].sort((a,b)=>b.id-a.id);
+}
+
+function renderFacturesList() {
+  const isAdmin = APP.role === 'admin';
+  const q = (document.getElementById('fl-search')?.value || '').toLowerCase();
+  const filterStatut = document.getElementById('fl-filter')?.value || '';
+
+  let list = getAllFactures().filter(f => {
+    const matchQ = !q || f.ref.toLowerCase().includes(q) || f.client_nom.toLowerCase().includes(q) || (f.commercial||'').toLowerCase().includes(q);
+    const matchS = !filterStatut || f.statut === filterStatut;
+    const matchC = isAdmin || f.commercial === APP.name;
+    return matchQ && matchS && matchC;
+  });
+
+  // KPIs
+  document.getElementById('fl-total').textContent   = list.length;
+  document.getElementById('fl-payees').textContent  = list.filter(f=>f.statut==='payee').length;
+  document.getElementById('fl-attente').textContent = list.filter(f=>f.statut==='emise').length;
+  document.getElementById('fl-total-amt').textContent = fmt(list.reduce((s,f)=>s+(f.net||0),0));
+  document.getElementById('fl-count').textContent   = list.length + ' facture(s)';
+
+  const statusCfg = {
+    'emise':   {cls:'sent',    lbl:'📤 Émise'},
+    'payee':   {cls:'ok',      lbl:'✅ Payée'},
+    'retard':  {cls:'late',    lbl:'⚠️ En retard'},
+    'annulee': {cls:'inactif', lbl:'❌ Annulée'},
+  };
+
+  const tbody = document.getElementById('fl-body');
+  const empty = document.getElementById('fl-empty');
+
+  if (!list.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = list.map(f => {
+    const sc = statusCfg[f.statut] || {cls:'draft', lbl:f.statut};
+    return `<tr>
+      <td><b style="color:var(--brand)">${f.ref}</b></td>
+      <td>
+        <div style="font-weight:600">${f.client_nom}</div>
+        <div style="font-size:11px;color:var(--muted)">${f.client_email||''}</div>
+      </td>
+      <td style="font-size:12px;color:var(--muted)">${f.commercial||'—'}</td>
+      <td style="font-size:12px">${f.date||'—'}</td>
+      <td style="font-size:12px;color:var(--accent)">${f.devis_ref||'—'}</td>
+      <td style="font-weight:700;color:var(--brand)">${fmt(f.net)} DT</td>
+      <td><span class="badge ${sc.cls}">${sc.lbl}</span></td>
+      <td>
+        <div style="display:flex;gap:5px">
+          <button class="ic-btn" onclick="consultFacture(${f.id})" title="Consulter">👁️</button>
+          <button class="ic-btn" onclick="imprimerFacture(${f.id})" title="Imprimer">🖨️</button>
+          <button class="ic-btn" onclick="emailFacture(${f.id})" title="Email" style="color:var(--violet)">📧</button>
+          ${f.statut==='emise'?`<button class="ic-btn" onclick="marquerPayee(${f.id})" title="Marquer payée" style="color:var(--ok)">✅</button>`:''}
+          ${isAdmin?`<button class="ic-btn del" onclick="deleteFacture(${f.id})" title="Supprimer">🗑️</button>`:''}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function consultFacture(id) {
+  const f = getAllFactures().find(x=>x.id===id);
+  if (!f) return;
+  // Charger dans la section facture
+  factLines = (f.lines||[]);
+  document.getElementById('fc-ref').value    = f.ref || '';
+  document.getElementById('fc-client').value = f.client_nom || '';
+  document.getElementById('fc-mf').value     = f.mf || '';
+  document.getElementById('fc-tel').value    = f.tel || '';
+  document.getElementById('fc-adr').value    = f.adr || '';
+  document.getElementById('fc-mode').value   = f.mode || 'Virement bancaire';
+  document.getElementById('fc-rem').value    = f.remise || 0;
+  updateFacture();
+  // Ouvrir dans un modal
+  const content = document.getElementById('fact-sheet').outerHTML;
+  document.getElementById('modal-title').textContent = f.ref + ' — ' + f.client_nom;
+  document.getElementById('modal-body').innerHTML = `<div style="padding:10px">${content}</div>`;
+  document.getElementById('modal-foot').innerHTML = `
+    <button class="cancel" onclick="closeModal()">Fermer</button>
+    <button class="save" onclick="imprimerFacture(${f.id})">🖨️ Imprimer</button>`;
+  document.getElementById('modal-overlay').classList.add('show');
+}
+
+function imprimerFacture(id) {
+  const f = getAllFactures().find(x=>x.id===id);
+  if (!f) return;
+  factLines = f.lines || [];
+  document.getElementById('fc-client').value = f.client_nom || '';
+  document.getElementById('fc-mf').value     = f.mf || '';
+  document.getElementById('fc-tel').value    = f.tel || '';
+  document.getElementById('fc-adr').value    = f.adr || '';
+  document.getElementById('fc-mode').value   = f.mode || 'Virement bancaire';
+  document.getElementById('fc-rem').value    = f.remise || 0;
+  updateFacture();
+  setTimeout(() => window.print(), 300);
+}
+
+function emailFacture(id) {
+  const f = getAllFactures().find(x=>x.id===id);
+  if (!f || !f.client_email) { showToast('Email client non renseigné','error'); return; }
+  const sujet = encodeURIComponent('Facture '+f.ref+' — SalesFlow Pro');
+  const corps = encodeURIComponent(
+    'Bonjour,\n\nVeuillez trouver ci-joint la facture '+f.ref+'.\n\n'+
+    'Client : '+f.client_nom+'\n'+
+    'Montant net à payer : '+fmt(f.net)+' DT\n'+
+    'Mode de paiement : '+(f.mode||'Virement bancaire')+'\n\n'+
+    'Cordialement,\n'+(f.commercial||APP.name)+'\nSalesFlow Pro'
+  );
+  window.open('mailto:'+encodeURIComponent(f.client_email)+'?subject='+sujet+'&body='+corps);
+  showToast('📧 Email ouvert pour '+f.client_nom,'success');
+}
+
+function marquerPayee(id) {
+  const saved = JSON.parse(localStorage.getItem('sf_factures_list') || '[]');
+  const existing = saved.find(f=>f.id===id);
+  if (existing) {
+    existing.statut = 'payee';
+  } else {
+    // Copier depuis démo et marquer payée
+    const all = getAllFactures();
+    const f = all.find(x=>x.id===id);
+    if (f) { f.statut='payee'; saved.push(f); }
+  }
+  localStorage.setItem('sf_factures_list', JSON.stringify(saved));
+  renderFacturesList();
+  showToast('✅ Facture marquée comme payée !','success');
+}
+
+function deleteFacture(id) {
+  if (!confirm('Supprimer cette facture ?')) return;
+  const saved = JSON.parse(localStorage.getItem('sf_factures_list') || '[]');
+  localStorage.setItem('sf_factures_list', JSON.stringify(saved.filter(f=>f.id!==id)));
+  renderFacturesList();
+  showToast('🗑️ Facture supprimée','warn');
+}
+
+// Sauvegarder facture depuis la section facture
+function saveFactureToList(statut='emise') {
+  const f = {
+    id: Date.now(),
+    ref: document.getElementById('fc-ref').value,
+    client_nom: document.getElementById('fc-client').value,
+    mf: document.getElementById('fc-mf').value,
+    tel: document.getElementById('fc-tel').value,
+    adr: document.getElementById('fc-adr').value,
+    mode: document.getElementById('fc-mode').value,
+    remise: parseFloat(document.getElementById('fc-rem').value)||0,
+    lines: [...factLines],
+    net: parseFloat(document.getElementById('f-net').textContent)||0,
+    commercial: APP.name,
+    date: new Date().toISOString().split('T')[0],
+    statut,
+    client_email: ''
+  };
+  const saved = JSON.parse(localStorage.getItem('sf_factures_list') || '[]');
+  saved.unshift(f);
+  localStorage.setItem('sf_factures_list', JSON.stringify(saved));
+  showToast('✅ Facture '+f.ref+' sauvegardée !','success');
+  setTimeout(()=>nav('factures-list'), 800);
+}
+
 /* ═══════════════════════════════════════
    BROUILLONS
 ═══════════════════════════════════════ */
