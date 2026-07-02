@@ -1384,7 +1384,7 @@ function togglePw(){
   document.getElementById('l-pw').type=pwVis?'text':'password';
   document.getElementById('l-eye').textContent=pwVis?'🙈':'👁️';
 }
-function showForgot(){ showToast('Fonctionnalité bientôt disponible','info'); }
+function showForgot(){ showToast("Fonctionnalité bientôt disponible",'info'); }
 
 async function doLogin(){
   const email=document.getElementById('l-email').value.trim().toLowerCase();
@@ -1407,7 +1407,7 @@ async function doLogin(){
     } catch(e){
       // Fallback démo
       const demo=DEMO_USERS.find(u=>u.email===email&&u.password===pw);
-      if(!demo){errEl.textContent='Email ou mot de passe incorrect';errEl.classList.add('show');btn.classList.remove('loading');btn.disabled=false;return;}
+      if(!demo){errEl.textContent="Email ou mot de passe incorrect";errEl.classList.add('show');btn.classList.remove('loading');btn.disabled=false;return;}
       role=demo.role; name=demo.name;
     }
     APP.role=role; APP.name=name; APP.email=email;
@@ -1758,7 +1758,7 @@ function updDvLine(id,k,v){
   calcDvTotaux();
 }
 function delDvLine(id){
-  if(APP.dvLines.length===1){showToast('Au moins une ligne requise','warn');return;}
+  if(APP.dvLines.length===1){showToast("Au moins une ligne requise",'warn');return;}
   APP.dvLines=APP.dvLines.filter(x=>x.id!==id);
   renderDvLines();
 }
@@ -1882,7 +1882,7 @@ function imprimerDv(){
 
 function emailDv(){
   const d=buildDvData('envoye');
-  if(!d.client_email){showToast('Email client non renseigné','error');return;}
+  if(!d.client_email){showToast("Email client non renseigné",'error');return;}
   const sujet=encodeURIComponent('Devis '+d.ref+' — SalesFlow Pro');
   const lignes=d.lines.filter(l=>l.service).map(l=>'  • '+l.service+' (x'+l.qty+') : '+fmt(dvLineTot(l))+' DT HT').join('\n');
   const corps=encodeURIComponent('Bonjour '+d.client_contact+',\n\nVeuillez trouver ci-dessous le devis '+d.ref+'.\n\nServices :\n'+lignes+'\n\nTotal HT : '+fmt(d.total_ht)+' DT\nTVA (20%) : '+fmt(d.total_tva)+' DT\nTOTAL TTC : '+fmt(d.total_ttc)+' DT\n\nPaiement : '+d.mode_paiement+' — '+d.delai_paiement+'\n\nCordialement,\n'+d.commercial+'\nSalesFlow Pro');
@@ -2197,7 +2197,7 @@ async function analyzeBCWithAI() {
   const bcTotal  = parseFloat(document.getElementById('bc-total').value)||0;
   const bcSign   = document.getElementById('bc-sign').value;
 
-  if (!dRef) { showToast('Sélectionne d'abord un devis de référence','error'); return; }
+  if (!dRef) { showToast("Sélectionne d'abord un devis de référence",'error'); return; }
 
   const d = BC_DEVIS_REF || getAllDevis().find(x=>x.id==dRef);
   if (!d) return;
@@ -2304,7 +2304,7 @@ async function analyzeBCWithAI() {
 }
 
 function acceptBC() {
-  if (!BC_DEVIS_REF) { showToast('Aucun devis sélectionné','error'); return; }
+  if (!BC_DEVIS_REF) { showToast("Aucun devis sélectionné",'error'); return; }
   showToast('✅ BC validé ! Chargement de la facture…','success');
   setTimeout(()=>{
     localStorage.setItem('sf_last_devis', JSON.stringify(BC_DEVIS_REF));
@@ -2493,7 +2493,7 @@ function telechargerFacture(id) {
   showToast('📥 Ouverture du document…','info');
   var contenu = genFactureHTML(f);
   var win = window.open('','_blank');
-  if (!win) { showToast('Autorisez les popups puis réessayez','warn'); return; }
+  if (!win) { showToast("Autorisez les popups puis réessayez",'warn'); return; }
   win.document.open();
   win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + f.ref + '</title>');
   win.document.write('<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;padding:16px;background:#fff;color:#111}.toolbar{background:#1E3A5F;padding:10px 16px;display:flex;gap:10px;align-items:center;margin-bottom:16px;border-radius:8px;flex-wrap:wrap}@media print{.toolbar{display:none!important}}</style>');
@@ -2514,7 +2514,7 @@ function telechargerDevis(id) {
   showToast('📥 Ouverture du document…','info');
   var contenu = genDevisHTML(d);
   var win = window.open('','_blank');
-  if (!win) { showToast('Autorisez les popups puis réessayez','warn'); return; }
+  if (!win) { showToast("Autorisez les popups puis réessayez",'warn'); return; }
   win.document.open();
   win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + d.ref + '</title>');
   win.document.write('<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;padding:16px;background:#fff;color:#111}.toolbar{background:#1E3A5F;padding:10px 16px;display:flex;gap:10px;align-items:center;margin-bottom:16px;border-radius:8px;flex-wrap:wrap}@media print{.toolbar{display:none!important}}</style>');
@@ -2647,7 +2647,7 @@ function updEditLine(id,k,v) {
 }
 
 function delEditLine(id) {
-  if (editLines.length===1) { showToast('Au moins une ligne requise','warn'); return; }
+  if (editLines.length===1) { showToast("Au moins une ligne requise",'warn'); return; }
   editLines = editLines.filter(x=>x.id!==id);
   renderEditLines();
 }
@@ -3082,7 +3082,7 @@ function imprimerFacture(id) {
 
 function emailFacture(id) {
   const f = getAllFactures().find(x=>x.id===id);
-  if (!f || !f.client_email) { showToast('Email client non renseigné','error'); return; }
+  if (!f || !f.client_email) { showToast("Email client non renseigné",'error'); return; }
   const sujet = encodeURIComponent('Facture '+f.ref+' — SalesFlow Pro');
   const corps = encodeURIComponent(
     'Bonjour,\n\nVeuillez trouver ci-joint la facture '+f.ref+'.\n\n'+
@@ -3610,7 +3610,7 @@ function imprimerConsult() {
 function emailDevis(id) {
   const d = DEVIS_LIST.find(x=>x.id===id);
   if(!d) return;
-  if(!d.client_email){showToast('Email client non renseigné','error');return;}
+  if(!d.client_email){showToast("Email client non renseigné",'error');return;}
   const lines = (d.lines||[]).filter(l=>l.service);
   const ht = lines.reduce((s,l)=>s+(parseFloat(l.qty)||0)*(parseFloat(l.price)||0),0);
   const tva=ht*0.2, ttc=ht+tva;
