@@ -388,7 +388,6 @@ label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-trans
 @media(max-width:768px){.sidebar{transform:translateX(-100%)}.main-content{margin-left:0}.type-tabs{grid-template-columns:repeat(2,1fr)}}
 @media print{.sidebar,.topbar,.toast,.panier-bar{display:none!important}.main-content{margin-left:0!important}.fact-sheet{box-shadow:none!important;border:none!important}}
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>
 
@@ -2143,68 +2142,45 @@ function genDevisHTML(d) {
   </div>`;
 }
 
-async function telechargerFacture(id) {
-  const f = getAllFactures().find(x=>x.id===id);
-  if (!f) return;
-  showToast('📥 Ouverture du PDF…','info');
-  const win = window.open('','_blank');
-  win.document.write(`<!DOCTYPE html><html><head>
-    <meta charset="UTF-8">
-    <title>${f.ref}</title>
-    <style>
-      *{box-sizing:border-box;margin:0;padding:0}
-      body{font-family:Arial,sans-serif;padding:20px;background:#fff;color:#111}
-      @media print{
-        body{padding:10px}
-        .no-print{display:none!important}
-      }
-    </style>
-  </head><body>
-    <div class="no-print" style="background:#1E3A5F;padding:10px 20px;display:flex;gap:10px;align-items:center;margin-bottom:16px;border-radius:8px">
-      <span style="color:#fff;font-weight:700;font-size:14px">📄 ${f.ref}</span>
-      <button onclick="window.print()" style="background:#48C9B0;border:none;border-radius:6px;padding:8px 18px;font-weight:700;font-size:13px;cursor:pointer;color:#1E3A5F">🖨️ Imprimer / Télécharger PDF</button>
-      <span style="color:rgba(255,255,255,.6);font-size:12px">→ Dans la boîte d'impression, choisir "Enregistrer en PDF"</span>
-    </div>
-    ${genFactureHTML(f)}
-    <script>
-      // Auto-print après chargement
-      window.onload = function() {
-        setTimeout(function(){ window.print(); }, 500);
-      };
-    <\/script>
-  </body></html>`);
+function telechargerFacture(id) {
+  var f = getAllFactures().find(function(x){return x.id===id;});
+  if (!f) { showToast('Facture non trouvée','error'); return; }
+  showToast('📥 Ouverture du document…','info');
+  var contenu = genFactureHTML(f);
+  var win = window.open('','_blank');
+  if (!win) { showToast('Autorisez les popups puis réessayez','warn'); return; }
+  win.document.open();
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + f.ref + '</title>');
+  win.document.write('<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;padding:16px;background:#fff;color:#111}.toolbar{background:#1E3A5F;padding:10px 16px;display:flex;gap:10px;align-items:center;margin-bottom:16px;border-radius:8px;flex-wrap:wrap}@media print{.toolbar{display:none!important}}</style>');
+  win.document.write('</head><body>');
+  win.document.write('<div class="toolbar">');
+  win.document.write('<span style="color:#fff;font-weight:700">📄 ' + f.ref + ' — ' + f.client_nom + '</span>');
+  win.document.write('<button onclick="window.print()" style="background:#48C9B0;border:none;border-radius:6px;padding:8px 16px;font-weight:700;font-size:13px;cursor:pointer;margin-left:auto">🖨️ Imprimer / PDF</button>');
+  win.document.write('<span style="color:rgba(255,255,255,.6);font-size:11px">Choisir "Enregistrer en PDF" dans la destination</span>');
+  win.document.write('</div>');
+  win.document.write(contenu);
+  win.document.write('</body></html>');
   win.document.close();
 }
 
-async function telechargerDevis(id) {
-  const d = getAllDevis().find(x=>x.id===id);
-  if (!d) return;
-  showToast('📥 Ouverture du PDF…','info');
-  const win = window.open('','_blank');
-  win.document.write(`<!DOCTYPE html><html><head>
-    <meta charset="UTF-8">
-    <title>${d.ref}</title>
-    <style>
-      *{box-sizing:border-box;margin:0;padding:0}
-      body{font-family:Arial,sans-serif;padding:20px;background:#fff;color:#111}
-      @media print{
-        body{padding:10px}
-        .no-print{display:none!important}
-      }
-    </style>
-  </head><body>
-    <div class="no-print" style="background:#1E3A5F;padding:10px 20px;display:flex;gap:10px;align-items:center;margin-bottom:16px;border-radius:8px">
-      <span style="color:#fff;font-weight:700;font-size:14px">📄 ${d.ref}</span>
-      <button onclick="window.print()" style="background:#48C9B0;border:none;border-radius:6px;padding:8px 18px;font-weight:700;font-size:13px;cursor:pointer;color:#1E3A5F">🖨️ Imprimer / Télécharger PDF</button>
-      <span style="color:rgba(255,255,255,.6);font-size:12px">→ Dans la boîte d'impression, choisir "Enregistrer en PDF"</span>
-    </div>
-    ${genDevisHTML(d)}
-    <script>
-      window.onload = function() {
-        setTimeout(function(){ window.print(); }, 500);
-      };
-    <\/script>
-  </body></html>`);
+function telechargerDevis(id) {
+  var d = getAllDevis().find(function(x){return x.id===id;});
+  if (!d) { showToast('Devis non trouvé','error'); return; }
+  showToast('📥 Ouverture du document…','info');
+  var contenu = genDevisHTML(d);
+  var win = window.open('','_blank');
+  if (!win) { showToast('Autorisez les popups puis réessayez','warn'); return; }
+  win.document.open();
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + d.ref + '</title>');
+  win.document.write('<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;padding:16px;background:#fff;color:#111}.toolbar{background:#1E3A5F;padding:10px 16px;display:flex;gap:10px;align-items:center;margin-bottom:16px;border-radius:8px;flex-wrap:wrap}@media print{.toolbar{display:none!important}}</style>');
+  win.document.write('</head><body>');
+  win.document.write('<div class="toolbar">');
+  win.document.write('<span style="color:#fff;font-weight:700">📄 ' + d.ref + ' — ' + d.client_nom + '</span>');
+  win.document.write('<button onclick="window.print()" style="background:#48C9B0;border:none;border-radius:6px;padding:8px 16px;font-weight:700;font-size:13px;cursor:pointer;margin-left:auto">🖨️ Imprimer / PDF</button>');
+  win.document.write('<span style="color:rgba(255,255,255,.6);font-size:11px">Choisir "Enregistrer en PDF" dans la destination</span>');
+  win.document.write('</div>');
+  win.document.write(contenu);
+  win.document.write('</body></html>');
   win.document.close();
 }
 
