@@ -1354,7 +1354,7 @@ function buildSidebar(){
   const items = [
     {sec:'PRINCIPAL'},
     {nav:dash, ic:'📊', lbl:'Dashboard'},
-    ...(isAdmin ? [{nav:'contacts', ic:'👥', lbl:'Contacts'}] : []),
+    {nav:'contacts', ic:'👥', lbl: isAdmin ? 'Contacts' : 'Mes Contacts'},
     {sec:'COMMERCIAL'},
     {nav:'devis',    ic:'📄', lbl: isAdmin ? 'Nouveau Devis' : 'Nouveau Devis'},
     {nav:'devis-list',ic:'📋', lbl: isAdmin ? 'Liste des Devis' : 'Mes Devis'},
@@ -1593,17 +1593,21 @@ const CONTACT_TYPES={
 };
 
 function renderContactForm(){
+  const isAdmin = APP.role === 'admin';
   const types=Object.entries(CONTACT_TYPES);
   document.getElementById('contact-tabs').innerHTML=types.map(([k,v])=>`
     <div class="type-tab ${APP.currentContact===k?'on':''}" onclick="setContactType('${k}')">
       <div class="t-ic" style="background:${v.bg}">${v.ic}</div>
-      <div><div class="t-lbl">${v.lbl}</div><div class="t-sub">Gérer</div></div>
+      <div><div class="t-lbl">${v.lbl}</div><div class="t-sub">${isAdmin?'Gérer':'Consulter'}</div></div>
       <div class="t-cnt">${getContactList(k).length}</div>
     </div>`).join('');
   const ct=CONTACT_TYPES[APP.currentContact];
+  // Cacher le formulaire d'ajout pour le commercial
+  document.getElementById('contact-form-card').style.display = isAdmin ? 'block' : 'none';
+  document.getElementById('contact-layout').style.gridTemplateColumns = isAdmin ? '380px 1fr' : '1fr';
   document.getElementById('cf-title').textContent='Nouveau '+ct.lbl.slice(0,-1);
   document.getElementById('cl-title').textContent=ct.lbl;
-  renderContactFormFields();
+  if(isAdmin) renderContactFormFields();
   renderContactList();
 }
 function setContactType(k){ APP.currentContact=k; renderContactForm(); }
