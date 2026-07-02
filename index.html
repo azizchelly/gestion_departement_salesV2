@@ -920,6 +920,69 @@ label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-trans
         </div>
       </div>
 
+      <!-- SECTION : BROUILLONS -->
+      <div class="section" id="sec-brouillons">
+        <div style="display:flex;gap:10px;margin-bottom:18px;align-items:center;flex-wrap:wrap">
+          <div class="search-wrap" style="flex:1;min-width:200px;margin:0">
+            <span class="s-ic">🔍</span>
+            <input type="text" id="br-search" placeholder="Rechercher un brouillon…" oninput="renderBrouillons()">
+          </div>
+          <select id="br-type" onchange="renderBrouillons()" style="padding:9px 14px;border:1.5px solid var(--line);border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;outline:none;background:#fff">
+            <option value="">Devis & Factures</option>
+            <option value="devis">Devis seulement</option>
+            <option value="facture">Factures seulement</option>
+          </select>
+          <button class="btn primary" onclick="nav('devis')">＋ Nouveau devis</button>
+        </div>
+
+        <!-- Stats -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px">
+          <div class="kpi blue" style="margin:0"><div class="kpi-ic">💾</div><div class="kpi-lbl">Total brouillons</div><div class="kpi-val" id="br-total">0</div></div>
+          <div class="kpi amber" style="margin:0"><div class="kpi-ic">📄</div><div class="kpi-lbl">Devis brouillon</div><div class="kpi-val" id="br-devis">0</div></div>
+          <div class="kpi violet" style="margin:0"><div class="kpi-ic">🧾</div><div class="kpi-lbl">Factures brouillon</div><div class="kpi-val" id="br-fact">0</div></div>
+        </div>
+
+        <!-- Liste devis brouillon -->
+        <div class="card" id="br-devis-card">
+          <div class="card-h">
+            <div class="card-h-l"><div class="cdot"></div><h2>📄 Devis en brouillon</h2></div>
+            <span id="br-devis-count" style="font-size:12px;font-weight:700;color:var(--muted)">0</span>
+          </div>
+          <div class="card-b" style="padding:0">
+            <table class="tbl">
+              <thead><tr>
+                <th>Référence</th><th>Client</th><th>Commercial</th>
+                <th>Date</th><th>Montant TTC</th><th>Actions</th>
+              </tr></thead>
+              <tbody id="br-devis-body"></tbody>
+            </table>
+            <div id="br-devis-empty" class="empty" style="display:none">
+              <div class="empty-ic">📄</div><b>Aucun devis en brouillon</b>
+            </div>
+          </div>
+        </div>
+
+        <!-- Liste factures brouillon -->
+        <div class="card" id="br-fact-card" style="margin-top:18px">
+          <div class="card-h">
+            <div class="card-h-l"><div class="cdot"></div><h2>🧾 Factures en brouillon</h2></div>
+            <span id="br-fact-count" style="font-size:12px;font-weight:700;color:var(--muted)">0</span>
+          </div>
+          <div class="card-b" style="padding:0">
+            <table class="tbl">
+              <thead><tr>
+                <th>Référence</th><th>Client</th><th>Commercial</th>
+                <th>Date</th><th>Net à payer</th><th>Actions</th>
+              </tr></thead>
+              <tbody id="br-fact-body"></tbody>
+            </table>
+            <div id="br-fact-empty" class="empty" style="display:none">
+              <div class="empty-ic">🧾</div><b>Aucune facture en brouillon</b>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- SECTION : BON DE COMMANDE -->
       <div class="section" id="sec-bc">
         <div style="display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start">
@@ -1125,6 +1188,7 @@ function nav(section){
   if(section==='comptes') renderComptes();
   if(section==='dash-admin') { loadObjectif(); }
   if(section==='devis-list') renderDevisList();
+  if(section==='brouillons') renderBrouillons();
   if(section==='dash-com') setTimeout(()=>{document.getElementById('com-prog-bar').style.width='64%'},300);
 }
 
@@ -1158,6 +1222,7 @@ function buildSidebar(){
     {sec:'COMMERCIAL'},
     {nav:'devis',    ic:'📄', lbl: isAdmin ? 'Nouveau Devis' : 'Nouveau Devis'},
     {nav:'devis-list',ic:'📋', lbl: isAdmin ? 'Liste des Devis' : 'Mes Devis'},
+    {nav:'brouillons', ic:'💾', lbl:'Brouillons'},
     {nav:'facture',  ic:'🧾', lbl: isAdmin ? 'Factures' : 'Mes Factures'},
     {nav:'bc',       ic:'📋', lbl:'Bons de commande'},
     {nav:'catalogue',ic:'📦', lbl:'Catalogue'},
@@ -1835,6 +1900,189 @@ function copyText(id){navigator.clipboard.writeText(document.getElementById(id).
 /* ═══════════════════════════════════════
    MONTANT EN LETTRES
 ═══════════════════════════════════════ */
+/* ═══════════════════════════════════════
+   BROUILLONS
+═══════════════════════════════════════ */
+function getBrouillonDevis() {
+  const isAdmin = APP.role === 'admin';
+  return getAllDevis().filter(d => {
+    const match = d.statut === 'brouillon';
+    const matchC = isAdmin || d.commercial === APP.name;
+    return match && matchC;
+  });
+}
+
+function getBrouillonFactures() {
+  const isAdmin = APP.role === 'admin';
+  const saved = JSON.parse(localStorage.getItem('sf_factures_brouillon') || '[]');
+  return saved.filter(f => isAdmin || f.commercial === APP.name);
+}
+
+function renderBrouillons() {
+  const q = (document.getElementById('br-search')?.value || '').toLowerCase();
+  const type = document.getElementById('br-type')?.value || '';
+
+  let devisList = getBrouillonDevis().filter(d =>
+    !q || d.ref.toLowerCase().includes(q) || d.client_nom.toLowerCase().includes(q)
+  );
+  let factList = getBrouillonFactures().filter(f =>
+    !q || (f.ref||'').toLowerCase().includes(q) || (f.client_nom||'').toLowerCase().includes(q)
+  );
+
+  // Stats
+  document.getElementById('br-total').textContent = devisList.length + factList.length;
+  document.getElementById('br-devis').textContent = devisList.length;
+  document.getElementById('br-fact').textContent = factList.length;
+
+  // Filtrer par type
+  const showDevis = !type || type === 'devis';
+  const showFact  = !type || type === 'facture';
+
+  document.getElementById('br-devis-card').style.display = showDevis ? 'block' : 'none';
+  document.getElementById('br-fact-card').style.display  = showFact  ? 'block' : 'none';
+
+  // Devis brouillon
+  if (showDevis) {
+    document.getElementById('br-devis-count').textContent = devisList.length;
+    if (!devisList.length) {
+      document.getElementById('br-devis-body').innerHTML = '';
+      document.getElementById('br-devis-empty').style.display = 'block';
+    } else {
+      document.getElementById('br-devis-empty').style.display = 'none';
+      document.getElementById('br-devis-body').innerHTML = devisList.map(d => `
+        <tr>
+          <td><b style="color:var(--brand)">${d.ref}</b></td>
+          <td>
+            <div style="font-weight:600">${d.client_nom||'—'}</div>
+            <div style="font-size:11px;color:var(--muted)">${d.client_email||''}</div>
+          </td>
+          <td style="font-size:12px;color:var(--muted)">${d.commercial||'—'}</td>
+          <td style="font-size:12px">${d.date_devis||'—'}</td>
+          <td style="font-weight:700;color:var(--brand)">${fmt(d.total_ttc)} DT</td>
+          <td>
+            <div style="display:flex;gap:5px">
+              <button class="ic-btn" onclick="consultDevis(${d.id})" title="Consulter">👁️</button>
+              <button class="ic-btn" onclick="modifierDevis(${d.id})" title="Modifier" style="color:var(--accent)">✏️</button>
+              <button class="ic-btn" onclick="devisToFacture(${d.id})" title="Générer facture" style="color:var(--ok)">🧾</button>
+              <button class="ic-btn del" onclick="deleteDevis(${d.id})" title="Supprimer">🗑️</button>
+            </div>
+          </td>
+        </tr>`).join('');
+    }
+  }
+
+  // Factures brouillon
+  if (showFact) {
+    document.getElementById('br-fact-count').textContent = factList.length;
+    if (!factList.length) {
+      document.getElementById('br-fact-body').innerHTML = '';
+      document.getElementById('br-fact-empty').style.display = 'block';
+    } else {
+      document.getElementById('br-fact-empty').style.display = 'none';
+      document.getElementById('br-fact-body').innerHTML = factList.map(f => `
+        <tr>
+          <td><b style="color:var(--brand)">${f.ref||'—'}</b></td>
+          <td>
+            <div style="font-weight:600">${f.client_nom||'—'}</div>
+          </td>
+          <td style="font-size:12px;color:var(--muted)">${f.commercial||'—'}</td>
+          <td style="font-size:12px">${f.date||'—'}</td>
+          <td style="font-weight:700;color:var(--brand)">${fmt(f.net||0)} DT</td>
+          <td>
+            <div style="display:flex;gap:5px">
+              <button class="ic-btn" onclick="modifierFacture(${f.id})" title="Modifier" style="color:var(--accent)">✏️</button>
+              <button class="ic-btn" onclick="imprimerFactBrouillon(${f.id})" title="Imprimer">🖨️</button>
+              <button class="ic-btn del" onclick="deleteFactBrouillon(${f.id})" title="Supprimer">🗑️</button>
+            </div>
+          </td>
+        </tr>`).join('');
+    }
+  }
+}
+
+function modifierDevis(id) {
+  const d = getAllDevis().find(x => x.id === id);
+  if (!d) return;
+  // Charger le devis dans le formulaire
+  localStorage.setItem('sf_edit_devis', JSON.stringify(d));
+  nav('devis');
+  showToast('✏️ Devis ' + d.ref + ' chargé pour modification', 'info');
+  setTimeout(() => loadDevisForEdit(d), 400);
+}
+
+function loadDevisForEdit(d) {
+  document.getElementById('dv-ref').value = d.ref || '';
+  document.getElementById('dv-date').value = d.date_devis || '';
+  document.getElementById('dv-valid').value = d.validite || 30;
+  document.getElementById('dv-objet').value = d.objet || '';
+  document.getElementById('dv-paie').value = d.mode_paiement || 'Virement bancaire';
+  document.getElementById('dv-delai').value = d.delai_paiement || '30 jours';
+  document.getElementById('dv-cond').value = d.conditions || '';
+  // Charger les lignes
+  APP.dvLines = (d.lines || []).map((l, i) => ({id: i+1, service: l.service, qty: l.qty, price: l.price}));
+  dvLid = APP.dvLines.length;
+  renderDvLines();
+  // Charger le client si trouvé
+  const clientEl = document.getElementById('dv-client');
+  const found = APP.clients.find(c => c.nom === d.client_nom);
+  if (found) {
+    clientEl.value = found.id;
+    fillDvClient();
+  }
+}
+
+function modifierFacture(id) {
+  nav('facture');
+  const saved = JSON.parse(localStorage.getItem('sf_factures_brouillon') || '[]');
+  const f = saved.find(x => x.id === id);
+  if (!f) return;
+  document.getElementById('fc-client').value = f.client_nom || '';
+  document.getElementById('fc-mf').value = f.mf || '';
+  document.getElementById('fc-tel').value = f.tel || '';
+  document.getElementById('fc-adr').value = f.adr || '';
+  document.getElementById('fc-mode').value = f.mode || 'Virement bancaire';
+  document.getElementById('fc-rem').value = f.rem || 0;
+  factLines = f.lines || [];
+  updateFacture();
+  showToast('✏️ Facture chargée pour modification', 'info');
+}
+
+function deleteFactBrouillon(id) {
+  if (!confirm('Supprimer cette facture brouillon ?')) return;
+  const saved = JSON.parse(localStorage.getItem('sf_factures_brouillon') || '[]');
+  localStorage.setItem('sf_factures_brouillon', JSON.stringify(saved.filter(f => f.id !== id)));
+  renderBrouillons();
+  showToast('🗑️ Facture supprimée', 'warn');
+}
+
+function imprimerFactBrouillon(id) {
+  modifierFacture(id);
+  setTimeout(() => imprimerFact(), 500);
+}
+
+// Sauvegarder facture en brouillon depuis la section facture
+function saveFactureBrouillon() {
+  const f = {
+    id: Date.now(),
+    ref: document.getElementById('fc-ref').value,
+    client_nom: document.getElementById('fc-client').value,
+    mf: document.getElementById('fc-mf').value,
+    tel: document.getElementById('fc-tel').value,
+    adr: document.getElementById('fc-adr').value,
+    mode: document.getElementById('fc-mode').value,
+    rem: document.getElementById('fc-rem').value,
+    lines: [...factLines],
+    net: parseFloat(document.getElementById('f-net').textContent) || 0,
+    commercial: APP.name,
+    date: new Date().toLocaleDateString('fr-FR'),
+    statut: 'brouillon'
+  };
+  const saved = JSON.parse(localStorage.getItem('sf_factures_brouillon') || '[]');
+  saved.unshift(f);
+  localStorage.setItem('sf_factures_brouillon', JSON.stringify(saved));
+  showToast('💾 Facture sauvegardée en brouillon !', 'success');
+}
+
 /* ═══════════════════════════════════════
    OBJECTIF ANNUEL ADMIN
 ═══════════════════════════════════════ */
