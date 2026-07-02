@@ -459,23 +459,49 @@ label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-trans
 
       <!-- SECTION : DASHBOARD ADMIN -->
       <div class="section" id="sec-dash-admin">
-        <!-- OBJECTIF ANNUEL ADMIN -->
-        <div style="background:linear-gradient(135deg,var(--brand),#2A5080);border-radius:14px;padding:18px 24px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:20px">
+        <!-- OBJECTIF ANNUEL ADMIN MODIFIABLE -->
+        <div id="obj-banner" style="background:linear-gradient(135deg,var(--brand),#2A5080);border-radius:14px;padding:18px 24px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:20px;position:relative">
           <div style="color:#fff">
-            <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px">🎯 Objectif annuel · 2026</div>
-            <div style="font-size:30px;font-weight:900;letter-spacing:-1px">840 000 <span style="font-size:16px;font-weight:600;color:rgba(255,255,255,.7)">DT</span></div>
-            <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:4px">réalisés sur 1 200 000 DT d'objectif annuel</div>
+            <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px">🎯 Objectif annuel · <span id="obj-annee">2026</span></div>
+            <div style="font-size:30px;font-weight:900;letter-spacing:-1px"><span id="obj-realise">840 000</span> <span style="font-size:16px;font-weight:600;color:rgba(255,255,255,.7)">DT</span></div>
+            <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:4px">réalisés sur <span id="obj-cible-txt">1 200 000</span> DT d'objectif annuel</div>
           </div>
           <div style="flex:1;max-width:340px">
-            <div style="display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,.55);margin-bottom:7px"><span>Progression annuelle</span><b style="color:#fff">70%</b></div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,.55);margin-bottom:7px"><span>Progression annuelle</span><b style="color:#fff" id="obj-pct-txt">70%</b></div>
             <div style="height:10px;background:rgba(255,255,255,.12);border-radius:5px;overflow:hidden">
-              <div style="height:100%;width:70%;background:linear-gradient(90deg,var(--emerald),#2ECC9A);border-radius:5px;transition:width 1.2s ease"></div>
+              <div id="obj-bar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--emerald),#2ECC9A);border-radius:5px;transition:width 1.2s ease"></div>
             </div>
-            <div style="display:flex;justify-content:space-between;font-size:11px;color:rgba(255,255,255,.4);margin-top:6px"><span>Janvier 2026</span><span>Décembre 2026</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:rgba(255,255,255,.4);margin-top:6px"><span>Janvier <span id="obj-annee2">2026</span></span><span>Décembre <span id="obj-annee3">2026</span></span></div>
           </div>
           <div style="text-align:right">
-            <div style="font-size:36px;font-weight:900;color:var(--emerald);letter-spacing:-1px">70%</div>
-            <div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:2px"><span style="color:var(--emerald);font-weight:700">↑ +8%</span> vs 2025</div>
+            <div style="font-size:36px;font-weight:900;color:var(--emerald);letter-spacing:-1px" id="obj-pct-big">70%</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:2px"><span id="obj-vs" style="color:var(--emerald);font-weight:700">↑ +8%</span> vs <span id="obj-annee-prev">2025</span></div>
+          </div>
+          <!-- Bouton modifier -->
+          <button onclick="openObjModal()" style="position:absolute;top:12px;right:14px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;font-size:12px;font-weight:600;padding:5px 12px;cursor:pointer;font-family:'Inter',sans-serif;transition:.2s" onmouseover="this.style.background='rgba(255,255,255,.25)'" onmouseout="this.style.background='rgba(255,255,255,.15)'">✏️ Modifier</button>
+        </div>
+
+        <!-- MODAL OBJECTIF -->
+        <div class="overlay" id="obj-modal" style="z-index:300">
+          <div class="modal" style="max-width:420px">
+            <div class="modal-h"><h3>🎯 Modifier l'objectif annuel</h3><button class="modal-close" onclick="document.getElementById('obj-modal').classList.remove('show')">✕</button></div>
+            <div class="modal-b">
+              <div class="field"><label>Année</label><div class="iw"><span class="ic">📅</span><input type="number" id="obj-f-annee" value="2026" min="2024" max="2030"></div></div>
+              <div class="field"><label>CA réalisé (DT)</label><div class="iw"><span class="ic">💰</span><input type="number" id="obj-f-realise" placeholder="ex: 840000"></div></div>
+              <div class="field"><label>Objectif cible (DT)</label><div class="iw"><span class="ic">🎯</span><input type="number" id="obj-f-cible" placeholder="ex: 1200000"></div></div>
+              <div class="field"><label>Évolution vs année précédente</label><div class="iw"><span class="ic">📈</span><input type="text" id="obj-f-vs" placeholder="ex: +8% ou -3%"></div></div>
+              <div style="background:var(--bg);border-radius:9px;padding:12px;margin-top:6px">
+                <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px">Aperçu progression</div>
+                <div style="height:8px;background:var(--line);border-radius:4px;overflow:hidden">
+                  <div id="obj-preview-bar" style="height:100%;background:linear-gradient(90deg,var(--ok),var(--emerald));border-radius:4px;transition:.3s"></div>
+                </div>
+                <div style="text-align:right;font-size:12px;font-weight:700;color:var(--ok);margin-top:4px" id="obj-preview-pct">0%</div>
+              </div>
+            </div>
+            <div class="modal-f">
+              <button class="cancel" onclick="document.getElementById('obj-modal').classList.remove('show')">Annuler</button>
+              <button class="save" onclick="saveObjectif()">✅ Enregistrer</button>
+            </div>
           </div>
         </div>
         <div class="flux">
@@ -1093,6 +1119,7 @@ function nav(section){
   if(section==='devis') initDevis();
   if(section==='facture') initFacture();
   if(section==='comptes') renderComptes();
+  if(section==='dash-admin') { loadObjectif(); }
   if(section==='devis-list') renderDevisList();
   if(section==='dash-com') setTimeout(()=>{document.getElementById('com-prog-bar').style.width='64%'},300);
 }
@@ -1804,6 +1831,64 @@ function copyText(id){navigator.clipboard.writeText(document.getElementById(id).
 /* ═══════════════════════════════════════
    MONTANT EN LETTRES
 ═══════════════════════════════════════ */
+/* ═══════════════════════════════════════
+   OBJECTIF ANNUEL ADMIN
+═══════════════════════════════════════ */
+function loadObjectif() {
+  const saved = JSON.parse(localStorage.getItem('sf_objectif') || 'null');
+  const obj = saved || { annee: 2026, realise: 840000, cible: 1200000, vs: '+8%' };
+  const pct = Math.round(obj.realise / obj.cible * 100);
+  document.getElementById('obj-annee').textContent = obj.annee;
+  document.getElementById('obj-annee2').textContent = obj.annee;
+  document.getElementById('obj-annee3').textContent = obj.annee;
+  document.getElementById('obj-annee-prev').textContent = obj.annee - 1;
+  document.getElementById('obj-realise').textContent = new Intl.NumberFormat('fr-FR').format(obj.realise);
+  document.getElementById('obj-cible-txt').textContent = new Intl.NumberFormat('fr-FR').format(obj.cible);
+  document.getElementById('obj-pct-txt').textContent = pct + '%';
+  document.getElementById('obj-pct-big').textContent = pct + '%';
+  document.getElementById('obj-vs').textContent = (obj.vs.startsWith('+') ? '↑ ' : '↓ ') + obj.vs;
+  setTimeout(() => {
+    document.getElementById('obj-bar').style.width = pct + '%';
+  }, 300);
+}
+
+function openObjModal() {
+  const saved = JSON.parse(localStorage.getItem('sf_objectif') || 'null');
+  const obj = saved || { annee: 2026, realise: 840000, cible: 1200000, vs: '+8%' };
+  document.getElementById('obj-f-annee').value = obj.annee;
+  document.getElementById('obj-f-realise').value = obj.realise;
+  document.getElementById('obj-f-cible').value = obj.cible;
+  document.getElementById('obj-f-vs').value = obj.vs;
+  updateObjPreview();
+  document.getElementById('obj-modal').classList.add('show');
+
+  // Mise à jour preview en temps réel
+  ['obj-f-realise','obj-f-cible'].forEach(id => {
+    document.getElementById(id).addEventListener('input', updateObjPreview);
+  });
+}
+
+function updateObjPreview() {
+  const r = parseFloat(document.getElementById('obj-f-realise').value) || 0;
+  const c = parseFloat(document.getElementById('obj-f-cible').value) || 1;
+  const pct = Math.min(100, Math.round(r / c * 100));
+  document.getElementById('obj-preview-bar').style.width = pct + '%';
+  document.getElementById('obj-preview-pct').textContent = pct + '%';
+}
+
+function saveObjectif() {
+  const obj = {
+    annee:   parseInt(document.getElementById('obj-f-annee').value) || 2026,
+    realise: parseFloat(document.getElementById('obj-f-realise').value) || 0,
+    cible:   parseFloat(document.getElementById('obj-f-cible').value) || 1,
+    vs:      document.getElementById('obj-f-vs').value || '+0%',
+  };
+  localStorage.setItem('sf_objectif', JSON.stringify(obj));
+  document.getElementById('obj-modal').classList.remove('show');
+  loadObjectif();
+  showToast('✅ Objectif mis à jour !', 'success');
+}
+
 /* ═══════════════════════════════════════
    LISTE DES DEVIS
 ═══════════════════════════════════════ */
