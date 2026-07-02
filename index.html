@@ -459,6 +459,25 @@ label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-trans
 
       <!-- SECTION : DASHBOARD ADMIN -->
       <div class="section" id="sec-dash-admin">
+        <!-- OBJECTIF ANNUEL ADMIN -->
+        <div style="background:linear-gradient(135deg,var(--brand),#2A5080);border-radius:14px;padding:18px 24px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:20px">
+          <div style="color:#fff">
+            <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px">🎯 Objectif annuel · 2026</div>
+            <div style="font-size:30px;font-weight:900;letter-spacing:-1px">840 000 <span style="font-size:16px;font-weight:600;color:rgba(255,255,255,.7)">DT</span></div>
+            <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:4px">réalisés sur 1 200 000 DT d'objectif annuel</div>
+          </div>
+          <div style="flex:1;max-width:340px">
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,.55);margin-bottom:7px"><span>Progression annuelle</span><b style="color:#fff">70%</b></div>
+            <div style="height:10px;background:rgba(255,255,255,.12);border-radius:5px;overflow:hidden">
+              <div style="height:100%;width:70%;background:linear-gradient(90deg,var(--emerald),#2ECC9A);border-radius:5px;transition:width 1.2s ease"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:rgba(255,255,255,.4);margin-top:6px"><span>Janvier 2026</span><span>Décembre 2026</span></div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:36px;font-weight:900;color:var(--emerald);letter-spacing:-1px">70%</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:2px"><span style="color:var(--emerald);font-weight:700">↑ +8%</span> vs 2025</div>
+          </div>
+        </div>
         <div class="flux">
           <div class="flux-title">⚡ Flux commercial</div>
           <div class="flux-steps">
@@ -539,11 +558,7 @@ label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-trans
 
       <!-- SECTION : DASHBOARD COMMERCIAL -->
       <div class="section" id="sec-dash-com">
-        <div style="background:linear-gradient(135deg,var(--brand),#2A5080);border-radius:14px;padding:18px 22px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:20px">
-          <div style="color:#fff"><div style="font-size:12px;font-weight:600;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Mon objectif · Juin 2026</div><div style="font-size:28px;font-weight:800" id="com-obj-val">38 400 DT</div><div style="font-size:12px;color:rgba(255,255,255,.6);margin-top:3px">réalisés sur 60 000 DT d'objectif</div></div>
-          <div style="flex:1;max-width:300px"><div style="display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,.6);margin-bottom:6px"><span>Progression</span><b style="color:#fff">64%</b></div><div style="height:8px;background:rgba(255,255,255,.15);border-radius:4px;overflow:hidden"><div id="com-prog-bar" style="height:100%;background:linear-gradient(90deg,var(--emerald),#2ECC9A);width:0;border-radius:4px;transition:width 1s ease"></div></div></div>
-          <div style="font-size:28px;font-weight:800;color:var(--emerald)">64%</div>
-        </div>
+
         <div class="qa-grid">
           <button class="qa-btn" onclick="nav('devis')"><div class="qa-ic" style="background:rgba(72,201,176,.12)">📄</div><div class="qa-lbl">Nouveau devis</div><div class="qa-sub">Avec remise possible</div></button>
           <button class="qa-btn" onclick="nav('facture')"><div class="qa-ic" style="background:rgba(46,134,193,.1)">🧾</div><div class="qa-lbl">Générer facture</div><div class="qa-sub">Depuis devis accepté</div></button>
@@ -1106,6 +1121,8 @@ async function doLogin(){
 }
 
 function doLogout(){
+  localStorage.clear();
+  sessionStorage.clear();
   APP={role:null,name:null,email:null,catalogue:[],clients:[],fournisseurs:[],freelancers:[],comptes:[],currentContact:'client',panier:{},dvLines:[],dvRemise:false,newRole:'commercial'};
   showPage('pg-login');
   document.getElementById('l-email').value='';
