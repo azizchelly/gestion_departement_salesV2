@@ -1039,34 +1039,103 @@ label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-trans
       <!-- SECTION : BON DE COMMANDE -->
       <div class="section" id="sec-bc">
         <div style="display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start">
-          <div class="card">
-            <div class="card-h"><div class="card-h-l"><div class="cdot"></div><h2>Devis de référence</h2></div></div>
-            <div class="card-b">
-              <div class="field"><label>N° du devis</label><div class="iw"><span class="ic">🔢</span><input id="bc-dref" value="DEV-2026-001"></div></div>
-              <div class="field"><label>Client</label><div class="iw"><span class="ic">🏢</span><input id="bc-dclient" value="DataCore SARL"></div></div>
-              <div id="bc-lines-wrap"></div>
-              <div style="margin-top:12px;padding-top:12px;border-top:2px solid var(--line);display:flex;justify-content:space-between"><span style="font-size:13px;color:var(--muted);font-weight:600">TOTAL DEVIS (HT)</span><span style="font-size:20px;font-weight:800;color:var(--brand)" id="bc-dtot">0 DT</span></div>
-            </div>
-          </div>
+
+          <!-- COLONNE GAUCHE : Devis référence -->
           <div>
             <div class="card">
-              <div class="card-h"><div class="card-h-l"><div class="cdot"></div><h2>Bon de commande reçu</h2></div></div>
+              <div class="card-h"><div class="card-h-l"><div class="cdot"></div><h2>Devis de référence</h2></div></div>
               <div class="card-b">
-                <div class="field"><label>N° du bon de commande</label><div class="iw"><span class="ic">🔢</span><input id="bc-ref" placeholder="ex : BC-2026-0457"></div></div>
-                <div class="field"><label>Client (sur le BC)</label><div class="iw"><span class="ic">🏢</span><input id="bc-client" placeholder="Nom sur le BC"></div></div>
-                <div class="field"><label>Montant total (HT, DT)</label><div class="iw"><span class="ic">💰</span><input type="number" id="bc-total" placeholder="ex : 8400"></div></div>
-                <div class="field"><label>Signé / cacheté ?</label><div class="iw"><span class="ic">✅</span><select id="bc-sign"><option value="oui">Oui</option><option value="non">Non</option></select></div></div>
-                <button class="btn primary" style="width:100%;padding:13px;margin-top:6px" onclick="analyzeBC()">🔍 Analyser le bon de commande</button>
+                <div class="field">
+                  <label>Sélectionner un devis</label>
+                  <div class="iw"><span class="ic">📄</span>
+                    <select id="bc-dref-sel" onchange="loadDevisBC()">
+                      <option value="">— Choisir un devis —</option>
+                    </select>
+                  </div>
+                </div>
+                <div id="bc-devis-info" style="display:none">
+                  <div class="field"><label>Client</label><div class="iw"><span class="ic">🏢</span><input id="bc-dclient" readonly style="background:var(--bg)"></div></div>
+                  <div id="bc-lines-wrap" style="margin-top:10px;border:1px solid var(--line);border-radius:8px;overflow:hidden"></div>
+                  <div style="margin-top:12px;padding-top:12px;border-top:2px solid var(--line);display:flex;justify-content:space-between">
+                    <span style="font-size:13px;color:var(--muted);font-weight:600">TOTAL HT</span>
+                    <span style="font-size:20px;font-weight:800;color:var(--brand)" id="bc-dtot">0 DT</span>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;margin-top:4px">
+                    <span style="font-size:13px;color:var(--muted)">TOTAL TTC</span>
+                    <span style="font-size:15px;font-weight:700;color:var(--ok)" id="bc-dttc">0 DT</span>
+                  </div>
+                </div>
               </div>
             </div>
-            <div class="card" id="bc-result" style="display:none">
-              <div class="card-h"><div class="card-h-l"><div class="cdot"></div><h2>Résultat de l'analyse</h2></div></div>
+          </div>
+
+          <!-- COLONNE DROITE -->
+          <div>
+            <div class="card">
+              <div class="card-h"><div class="card-h-l"><div class="cdot"></div><h2>📎 Importer le Bon de Commande</h2></div></div>
               <div class="card-b">
+                <!-- Zone upload image -->
+                <div id="bc-drop-zone" onclick="document.getElementById('bc-file-input').click()"
+                  style="border:2px dashed var(--accent);border-radius:12px;padding:32px;text-align:center;cursor:pointer;transition:.2s;background:rgba(46,134,193,.03);margin-bottom:16px"
+                  ondragover="event.preventDefault();this.style.background='rgba(46,134,193,.08)'"
+                  ondragleave="this.style.background='rgba(46,134,193,.03)'"
+                  ondrop="handleBCDrop(event)">
+                  <div style="font-size:36px;margin-bottom:8px">📄</div>
+                  <div style="font-size:14px;font-weight:700;color:var(--brand)">Glisser l'image du BC ici</div>
+                  <div style="font-size:12px;color:var(--muted);margin-top:4px">ou cliquer pour sélectionner</div>
+                  <div style="font-size:11px;color:var(--muted);margin-top:6px">JPG, PNG, PDF acceptés</div>
+                </div>
+                <input type="file" id="bc-file-input" accept="image/*,.pdf" style="display:none" onchange="handleBCFile(event)">
+
+                <!-- Aperçu image -->
+                <div id="bc-img-preview" style="display:none;margin-bottom:16px">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                    <span style="font-size:12px;font-weight:700;color:var(--brand)">✅ Document chargé</span>
+                    <button onclick="clearBCFile()" style="background:none;border:none;color:var(--bad);cursor:pointer;font-size:12px;font-weight:600">✕ Supprimer</button>
+                  </div>
+                  <img id="bc-img" style="max-width:100%;border-radius:8px;border:1px solid var(--line);max-height:300px;object-fit:contain">
+                </div>
+
+                <!-- Saisie manuelle en complément -->
+                <div style="background:var(--bg);border-radius:10px;padding:14px;margin-bottom:14px">
+                  <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Informations complémentaires</div>
+                  <div class="field-row">
+                    <div class="field" style="margin:0"><label>N° BC</label><div class="iw"><span class="ic">🔢</span><input id="bc-ref" placeholder="BC-2026-0457"></div></div>
+                    <div class="field" style="margin:0"><label>Montant (DT)</label><div class="iw"><span class="ic">💰</span><input type="number" id="bc-total" placeholder="Montant HT"></div></div>
+                  </div>
+                  <div class="field-row" style="margin-top:10px">
+                    <div class="field" style="margin:0"><label>Client sur BC</label><div class="iw"><span class="ic">🏢</span><input id="bc-client" placeholder="Nom client"></div></div>
+                    <div class="field" style="margin:0"><label>Signé / cacheté</label><div class="iw"><span class="ic">✅</span><select id="bc-sign"><option value="oui">Oui</option><option value="non">Non</option></select></div></div>
+                  </div>
+                </div>
+
+                <button class="btn primary" style="width:100%;padding:14px;font-size:14px" onclick="analyzeBCWithAI()">
+                  🤖 Analyser avec l'IA
+                </button>
+              </div>
+            </div>
+
+            <!-- RÉSULTAT ANALYSE -->
+            <div class="card" id="bc-result" style="display:none;margin-top:0">
+              <div class="card-h"><div class="card-h-l"><div class="cdot"></div><h2>Résultat de l'analyse IA</h2></div></div>
+              <div class="card-b">
+                <div id="bc-ai-loading" style="display:none;text-align:center;padding:20px">
+                  <div style="font-size:24px;margin-bottom:8px">🤖</div>
+                  <div style="font-size:13px;font-weight:600;color:var(--brand)">L'IA analyse le bon de commande…</div>
+                  <div style="font-size:11px;color:var(--muted);margin-top:4px">Comparaison avec le devis en cours</div>
+                  <div style="height:4px;background:var(--line);border-radius:2px;margin-top:12px;overflow:hidden">
+                    <div id="bc-progress" style="height:100%;background:linear-gradient(90deg,var(--accent),var(--emerald));border-radius:2px;width:0%;transition:width .3s"></div>
+                  </div>
+                </div>
                 <div id="bc-verdict"></div>
                 <div id="bc-checks" style="border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:12px"></div>
+                <div id="bc-ai-analysis" style="display:none;background:rgba(46,134,193,.05);border:1px solid rgba(46,134,193,.2);border-radius:10px;padding:14px;margin-top:12px">
+                  <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;margin-bottom:8px">🤖 Analyse IA détaillée</div>
+                  <div id="bc-ai-text" style="font-size:13px;color:var(--text);line-height:1.6;white-space:pre-wrap"></div>
+                </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
-                  <button class="btn danger" style="padding:12px" onclick="showToast('✕ BC refusé','error')">✕ Refuser le BC</button>
-                  <button class="btn success" id="bc-accept-btn" style="padding:12px" onclick="showToast('✅ BC validé !','success')">✓ Valider</button>
+                  <button class="btn danger" style="padding:12px" onclick="showToast('✕ BC refusé — motif enregistré','error')">✕ Refuser le BC</button>
+                  <button class="btn success" id="bc-accept-btn" style="padding:12px" onclick="acceptBC()">✓ Valider & Générer Facture</button>
                 </div>
               </div>
             </div>
@@ -1255,6 +1324,7 @@ function nav(section){
   if(section==='devis-list') renderDevisList();
   if(section==='brouillons') renderBrouillons();
   if(section==='factures-list') renderFacturesList();
+  if(section==='bc') initBC();
   if(section==='dash-com') setTimeout(()=>{document.getElementById('com-prog-bar').style.width='64%'},300);
 }
 
@@ -1967,6 +2037,197 @@ function copyText(id){navigator.clipboard.writeText(document.getElementById(id).
 /* ═══════════════════════════════════════
    MONTANT EN LETTRES
 ═══════════════════════════════════════ */
+/* ═══════════════════════════════════════
+   BON DE COMMANDE + IA
+═══════════════════════════════════════ */
+let BC_IMAGE_B64 = null;
+let BC_DEVIS_REF = null;
+
+function initBC() {
+  // Peupler le select des devis
+  const sel = document.getElementById('bc-dref-sel');
+  if (!sel) return;
+  const devis = getAllDevis();
+  sel.innerHTML = '<option value="">— Choisir un devis —</option>' +
+    devis.map(d=>`<option value="${d.id}">${d.ref} — ${d.client_nom} — ${fmt(d.total_ttc)} DT</option>`).join('');
+}
+
+function loadDevisBC() {
+  const id = parseInt(document.getElementById('bc-dref-sel').value);
+  if (!id) { document.getElementById('bc-devis-info').style.display='none'; return; }
+  const d = getAllDevis().find(x=>x.id===id);
+  if (!d) return;
+  BC_DEVIS_REF = d;
+  document.getElementById('bc-dclient').value = d.client_nom || '';
+  document.getElementById('bc-client').value  = d.client_nom || '';
+  const lines = (d.lines||[]).filter(l=>l.service);
+  const ht  = lines.reduce((s,l)=>s+(parseFloat(l.qty)||0)*(parseFloat(l.price)||0),0);
+  const ttc = ht*1.2;
+  document.getElementById('bc-dtot').textContent = fmt(ht)+' DT';
+  document.getElementById('bc-dttc').textContent = fmt(ttc)+' DT';
+  document.getElementById('bc-total').value = ht;
+  document.getElementById('bc-lines-wrap').innerHTML =
+    '<div style="background:var(--brand);color:#fff;font-size:11px;font-weight:700;padding:7px 10px">Lignes du devis</div>' +
+    lines.map((l,i)=>`<div style="display:flex;justify-content:space-between;padding:7px 10px;font-size:12px;${i%2===0?'':'background:#f4f7fb'};border-bottom:1px solid var(--line)"><span>${l.service} (x${l.qty})</span><span style="font-weight:700">${fmt((l.qty||0)*(l.price||0))} DT</span></div>`).join('');
+  document.getElementById('bc-devis-info').style.display='block';
+}
+
+function handleBCFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  processBCFile(file);
+}
+
+function handleBCDrop(e) {
+  e.preventDefault();
+  document.getElementById('bc-drop-zone').style.background='rgba(46,134,193,.03)';
+  const file = e.dataTransfer.files[0];
+  if (file) processBCFile(file);
+}
+
+function processBCFile(file) {
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    const result = ev.target.result;
+    BC_IMAGE_B64 = result.split(',')[1];
+    document.getElementById('bc-img').src = result;
+    document.getElementById('bc-img-preview').style.display='block';
+    document.getElementById('bc-drop-zone').style.display='none';
+    showToast('✅ Document chargé — prêt pour analyse','success');
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearBCFile() {
+  BC_IMAGE_B64 = null;
+  document.getElementById('bc-img').src='';
+  document.getElementById('bc-img-preview').style.display='none';
+  document.getElementById('bc-drop-zone').style.display='block';
+  document.getElementById('bc-file-input').value='';
+}
+
+async function analyzeBCWithAI() {
+  const dRef  = document.getElementById('bc-dref-sel').value;
+  const bcRef = document.getElementById('bc-ref').value.trim();
+  const bcClient = document.getElementById('bc-client').value.trim().toLowerCase();
+  const bcTotal  = parseFloat(document.getElementById('bc-total').value)||0;
+  const bcSign   = document.getElementById('bc-sign').value;
+
+  if (!dRef) { showToast('Sélectionne d'abord un devis de référence','error'); return; }
+
+  const d = BC_DEVIS_REF || getAllDevis().find(x=>x.id==dRef);
+  if (!d) return;
+
+  // Afficher le résultat
+  document.getElementById('bc-result').style.display='block';
+  document.getElementById('bc-ai-loading').style.display='block';
+  document.getElementById('bc-verdict').innerHTML='';
+  document.getElementById('bc-checks').innerHTML='';
+  document.getElementById('bc-ai-analysis').style.display='none';
+
+  // Animation barre de progression
+  let prog=0;
+  const progInterval = setInterval(()=>{
+    prog = Math.min(90, prog+10);
+    const el = document.getElementById('bc-progress');
+    if(el) el.style.width=prog+'%';
+  },200);
+
+  // Analyse manuelle
+  const lines = (d.lines||[]).filter(l=>l.service);
+  const dHT = lines.reduce((s,l)=>s+(parseFloat(l.qty)||0)*(parseFloat(l.price)||0),0);
+  const dClient = (d.client_nom||'').toLowerCase();
+  const checks=[];let errors=0,warnings=0;
+
+  checks.push({s:bcRef?'ok':'warn', t:'Référence BC', d:bcRef?'N° '+bcRef+' renseigné':'Aucune référence saisie'});
+  if(!bcRef) warnings++;
+
+  const clientOk=bcClient&&dClient&&(bcClient.includes(dClient.split(' ')[0])||dClient.includes(bcClient.split(' ')[0]));
+  checks.push({s:clientOk?'ok':'warn', t:'Correspondance client', d:clientOk?'Client identique au devis':'Nom diffère — vérifier'});
+  if(!clientOk) warnings++;
+
+  const diff=Math.abs(bcTotal-dHT), pct=dHT?diff/dHT*100:100;
+  if(diff<1){checks.push({s:'ok',t:'Montant HT',d:'Montant identique : '+fmt(bcTotal)+' DT'});}
+  else if(pct<=2){checks.push({s:'warn',t:'Montant HT',d:'Écart mineur ('+pct.toFixed(1)+'%) — probable arrondi'});warnings++;}
+  else{checks.push({s:'bad',t:'Montant HT',d:'Écart de '+fmt(diff)+' DT — BC='+fmt(bcTotal)+' vs Devis='+fmt(dHT)});errors++;}
+
+  checks.push({s:bcSign==='oui'?'ok':'warn', t:'Signature / cachet', d:bcSign==='oui'?'Document signé et cacheté':'Non signé — demander une version signée'});
+  if(bcSign!=='oui') warnings++;
+
+  // Si image uploadée → analyse IA via API Claude
+  let aiText = '';
+  if (BC_IMAGE_B64) {
+    try {
+      const devisResume = lines.map(l=>`- ${l.service} (x${l.qty}) : ${fmt((l.qty||0)*(l.price||0))} DT HT`).join('\n');
+      const prompt = `Tu es un expert en gestion commerciale. Analyse ce bon de commande (image) et compare-le au devis suivant :\n\nDEVIS ${d.ref} — Client: ${d.client_nom}\nLignes:\n${devisResume}\nTotal HT: ${fmt(dHT)} DT\nTotal TTC: ${fmt(dHT*1.2)} DT\n\nVérifie:\n1. Les services commandés correspondent-ils au devis ?\n2. Les quantités sont-elles identiques ?\n3. Le montant total correspond-il ?\n4. Y a-t-il des anomalies ou points d'attention ?\n\nRéponds en français, de façon concise et structurée.`;
+
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          model:'claude-sonnet-4-6',
+          max_tokens:1000,
+          messages:[{
+            role:'user',
+            content:[
+              {type:'image', source:{type:'base64', media_type:'image/jpeg', data:BC_IMAGE_B64}},
+              {type:'text',  text:prompt}
+            ]
+          }]
+        })
+      });
+      const data = await resp.json();
+      aiText = data.content?.[0]?.text || '';
+    } catch(e) {
+      aiText = 'Analyse IA non disponible : '+e.message;
+    }
+  }
+
+  clearInterval(progInterval);
+  const el = document.getElementById('bc-progress');
+  if(el) el.style.width='100%';
+
+  setTimeout(()=>{
+    document.getElementById('bc-ai-loading').style.display='none';
+
+    const sym={'ok':'✓','warn':'!','bad':'✕'};
+    const colors={'ok':'#1E9E6A','warn':'#D97706','bad':'#DC2626'};
+    const bgs={'ok':'#E6F7EF','warn':'#FEF3E2','bad':'#FDECEC'};
+
+    let cls=errors>0?'bad':warnings>0?'warn':'ok';
+    let title=errors>0?'⚠️ Non conforme — à vérifier':warnings>0?'Conforme avec réserves':'✅ Conforme — bon à valider';
+    let sub=errors>0?errors+' écart(s) bloquant(s)':warnings>0?warnings+' point(s) à vérifier':'Le BC correspond au devis';
+
+    document.getElementById('bc-verdict').innerHTML=`
+      <div style="background:${bgs[cls]};border:1px solid ${colors[cls]}40;border-radius:10px;padding:16px;display:flex;align-items:center;gap:14px">
+        <div style="width:44px;height:44px;border-radius:50%;background:${colors[cls]};display:grid;place-items:center;color:#fff;font-size:20px;font-weight:800;flex-shrink:0">${sym[cls]}</div>
+        <div><div style="font-size:16px;font-weight:800;color:${colors[cls]}">${title}</div><div style="font-size:12px;color:#888;margin-top:2px">${sub}</div></div>
+      </div>`;
+
+    document.getElementById('bc-checks').innerHTML=checks.map(c=>`
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line)">
+        <div style="width:20px;height:20px;border-radius:50%;background:${colors[c.s]};display:grid;place-items:center;color:#fff;font-size:11px;font-weight:700;flex-shrink:0">${sym[c.s]}</div>
+        <div><b style="display:block;font-size:13px">${c.t}</b><span style="font-size:12px;color:#888">${c.d}</span></div>
+      </div>`).join('');
+
+    if (aiText) {
+      document.getElementById('bc-ai-analysis').style.display='block';
+      document.getElementById('bc-ai-text').textContent=aiText;
+    }
+
+    document.getElementById('bc-accept-btn').disabled=errors>0;
+  }, 500);
+}
+
+function acceptBC() {
+  if (!BC_DEVIS_REF) { showToast('Aucun devis sélectionné','error'); return; }
+  showToast('✅ BC validé ! Chargement de la facture…','success');
+  setTimeout(()=>{
+    localStorage.setItem('sf_last_devis', JSON.stringify(BC_DEVIS_REF));
+    nav('facture');
+  }, 800);
+}
+
 /* ═══════════════════════════════════════
    TÉLÉCHARGEMENT PDF
 ═══════════════════════════════════════ */
