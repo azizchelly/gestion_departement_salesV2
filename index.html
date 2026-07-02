@@ -1145,6 +1145,18 @@ label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-trans
   </div>
 </div>
 
+
+<!-- MODAL ÉDITION DEVIS/FACTURE -->
+<div class="overlay" id="edit-overlay" style="z-index:400">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-h" style="position:sticky;top:0;background:#fff">
+      <h3 id="edit-title">Modifier</h3>
+      <button class="modal-close" onclick="closeEditModal()">✕</button>
+    </div>
+    <div class="modal-b" id="edit-body" style="padding:20px"></div>
+    <div class="modal-f" id="edit-foot"></div>
+  </div>
+</div>
 <!-- PRINT AREA -->
 <div id="print-area" style="display:none"></div>
 
@@ -1956,6 +1968,276 @@ function copyText(id){navigator.clipboard.writeText(document.getElementById(id).
    MONTANT EN LETTRES
 ═══════════════════════════════════════ */
 /* ═══════════════════════════════════════
+   ÉDITION DEVIS & FACTURES
+═══════════════════════════════════════ */
+let EDIT_TYPE = null; // 'devis' ou 'facture'
+let EDIT_ID   = null;
+let editLines = [];
+let editLid   = 0;
+
+function closeEditModal() {
+  document.getElementById('edit-overlay').classList.remove('show');
+}
+
+/* ─── ÉDITER DEVIS ─── */
+function editerDevis(id) {
+  const d = getAllDevis().find(x=>x.id===id);
+  if (!d) return;
+  EDIT_TYPE = 'devis'; EDIT_ID = id;
+  editLines = (d.lines||[]).map((l,i)=>({id:i+1,...l}));
+  editLid   = editLines.length;
+
+  document.getElementById('edit-title').textContent = '✏️ Modifier ' + d.ref;
+  document.getElementById('edit-body').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <div class="field" style="margin:0"><label>Référence</label><div class="iw"><span class="ic">🔢</span><input id="ed-ref" value="${d.ref||''}" readonly style="background:var(--bg)"></div></div>
+      <div class="field" style="margin:0"><label>Date</label><div class="iw"><span class="ic">📅</span><input type="date" id="ed-date" value="${d.date_devis||''}"></div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <div class="field" style="margin:0"><label>Client</label><div class="iw"><span class="ic">🏢</span><input id="ed-client" value="${d.client_nom||''}"></div></div>
+      <div class="field" style="margin:0"><label>Email client</label><div class="iw"><span class="ic">✉️</span><input id="ed-email" value="${d.client_email||''}"></div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <div class="field" style="margin:0"><label>Statut</label><div class="iw"><span class="ic">📌</span><select id="ed-statut">
+        <option value="brouillon" ${d.statut==='brouillon'?'selected':''}>💾 Brouillon</option>
+        <option value="envoye"    ${d.statut==='envoye'?'selected':''}>📤 Envoyé</option>
+        <option value="accepté"   ${d.statut==='accepté'?'selected':''}>✅ Accepté</option>
+        <option value="refusé"    ${d.statut==='refusé'?'selected':''}>❌ Refusé</option>
+        <option value="expiré"    ${d.statut==='expiré'?'selected':''}>⏱ Expiré</option>
+      </select></div></div>
+      <div class="field" style="margin:0"><label>Validité (jours)</label><div class="iw"><span class="ic">⏱</span><input type="number" id="ed-validite" value="${d.validite||30}"></div></div>
+    </div>
+    <div class="field" style="margin-bottom:14px"><label>Objet</label><div class="iw"><span class="ic" style="top:14px">📝</span><textarea id="ed-objet" style="min-height:60px">${d.objet||''}</textarea></div></div>
+
+    <!-- LIGNES -->
+    <div style="border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:14px">
+      <div style="background:var(--brand);color:#fff;padding:10px 14px;font-size:12px;font-weight:700;display:flex;justify-content:space-between;align-items:center">
+        <span>📋 Lignes de services</span>
+        <button onclick="addEditLine()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:6px;color:#fff;font-size:12px;font-weight:600;padding:4px 10px;cursor:pointer;font-family:'Inter',sans-serif">＋ Ajouter</button>
+      </div>
+      <div style="padding:12px">
+        <div style="display:grid;grid-template-columns:1fr 70px 110px 90px 32px;gap:8px;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--line)">
+          <span style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase">Service</span>
+          <span style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;text-align:center">Qté</span>
+          <span style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;text-align:right">Prix HT (DT)</span>
+          <span style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;text-align:right">Total HT</span>
+          <span></span>
+        </div>
+        <div id="edit-lines-wrap"></div>
+      </div>
+      <div style="background:var(--bg);padding:10px 14px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:14px">
+        <span style="font-size:12px;color:var(--muted)">Total HT : <b id="ed-ht" style="color:var(--brand)">0 DT</b></span>
+        <span style="font-size:12px;color:var(--muted)">TVA 20% : <b id="ed-tva" style="color:var(--brand)">0 DT</b></span>
+        <span style="font-size:13px;font-weight:800;color:var(--brand)">TTC : <span id="ed-ttc">0 DT</span></span>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="field" style="margin:0"><label>Mode paiement</label><div class="iw"><span class="ic">💳</span><select id="ed-mode">
+        <option ${d.mode_paiement==='Virement bancaire'?'selected':''}>Virement bancaire</option>
+        <option ${d.mode_paiement==='Chèque'?'selected':''}>Chèque</option>
+        <option ${d.mode_paiement==='Espèces'?'selected':''}>Espèces</option>
+      </select></div></div>
+      <div class="field" style="margin:0"><label>Délai paiement</label><div class="iw"><span class="ic">📅</span><select id="ed-delai">
+        <option ${d.delai_paiement==='À réception'?'selected':''}>À réception</option>
+        <option ${d.delai_paiement==='15 jours'?'selected':''}>15 jours</option>
+        <option ${d.delai_paiement==='30 jours'?'selected':''}>30 jours</option>
+        <option ${d.delai_paiement==='60 jours'?'selected':''}>60 jours</option>
+      </select></div></div>
+    </div>`;
+
+  renderEditLines();
+  document.getElementById('edit-foot').innerHTML = `
+    <button class="cancel" onclick="closeEditModal()">Annuler</button>
+    <button class="save" onclick="saveEditDevis()">✅ Enregistrer les modifications</button>`;
+  document.getElementById('edit-overlay').classList.add('show');
+}
+
+function addEditLine(service='',qty=1,price='') {
+  editLid++;
+  editLines.push({id:editLid,service,qty,price});
+  renderEditLines();
+}
+
+function renderEditLines() {
+  document.getElementById('edit-lines-wrap').innerHTML = editLines.map(l=>`
+    <div style="display:grid;grid-template-columns:1fr 70px 110px 90px 32px;gap:8px;align-items:center;margin-bottom:8px">
+      <input value="${l.service||''}" placeholder="Service…" oninput="updEditLine(${l.id},'service',this.value)"
+        style="padding:8px 10px;border:1.5px solid var(--line);border-radius:7px;font-size:13px;font-family:'Inter',sans-serif;outline:none">
+      <input type="number" value="${l.qty||1}" min="1" oninput="updEditLine(${l.id},'qty',this.value)"
+        style="padding:8px;border:1.5px solid var(--line);border-radius:7px;font-size:13px;text-align:center;font-family:'Inter',sans-serif;outline:none">
+      <input type="number" value="${l.price||''}" placeholder="0" oninput="updEditLine(${l.id},'price',this.value)"
+        style="padding:8px 10px;border:1.5px solid var(--line);border-radius:7px;font-size:13px;text-align:right;font-family:'Inter',sans-serif;outline:none">
+      <div id="edl-${l.id}" style="padding:8px 10px;background:var(--bg);border:1px solid var(--line);border-radius:7px;font-size:13px;font-weight:700;text-align:right;color:var(--brand)">
+        ${fmt((parseFloat(l.qty)||0)*(parseFloat(l.price)||0))} DT
+      </div>
+      <button onclick="delEditLine(${l.id})" style="width:28px;height:28px;border-radius:7px;border:1px solid var(--line);background:#fff;cursor:pointer;font-size:12px;display:grid;place-items:center;color:var(--bad)" onmouseover="this.style.background='#FDECEC'" onmouseout="this.style.background='#fff'">✕</button>
+    </div>`).join('');
+  calcEditTotaux();
+}
+
+function updEditLine(id,k,v) {
+  const l = editLines.find(x=>x.id===id);
+  if (!l) return;
+  l[k] = k==='service' ? v : (parseFloat(v)||0);
+  const el = document.getElementById('edl-'+id);
+  if (el) el.textContent = fmt((parseFloat(l.qty)||0)*(parseFloat(l.price)||0))+' DT';
+  calcEditTotaux();
+}
+
+function delEditLine(id) {
+  if (editLines.length===1) { showToast('Au moins une ligne requise','warn'); return; }
+  editLines = editLines.filter(x=>x.id!==id);
+  renderEditLines();
+}
+
+function calcEditTotaux() {
+  const ht  = editLines.reduce((s,l)=>s+(parseFloat(l.qty)||0)*(parseFloat(l.price)||0),0);
+  const tva = ht*0.2, ttc = ht+tva;
+  const eh = document.getElementById('ed-ht');
+  const et = document.getElementById('ed-tva');
+  const ec = document.getElementById('ed-ttc');
+  if(eh) eh.textContent = fmt(ht)+' DT';
+  if(et) et.textContent = fmt(tva)+' DT';
+  if(ec) ec.textContent = fmt(ttc)+' DT';
+}
+
+function saveEditDevis() {
+  const ht  = editLines.reduce((s,l)=>s+(parseFloat(l.qty)||0)*(parseFloat(l.price)||0),0);
+  const tva = ht*0.2;
+  const updated = {
+    ref:           document.getElementById('ed-ref').value,
+    date_devis:    document.getElementById('ed-date').value,
+    client_nom:    document.getElementById('ed-client').value,
+    client_email:  document.getElementById('ed-email').value,
+    statut:        document.getElementById('ed-statut').value,
+    validite:      document.getElementById('ed-validite').value,
+    objet:         document.getElementById('ed-objet').value,
+    mode_paiement: document.getElementById('ed-mode').value,
+    delai_paiement:document.getElementById('ed-delai').value,
+    lines:         editLines.map(l=>({service:l.service,qty:l.qty,price:l.price})),
+    total_ht:      ht,
+    total_tva:     tva,
+    total_ttc:     ht+tva,
+    commercial:    APP.name,
+  };
+
+  // Sauvegarder dans sf_devis_list
+  const saved = JSON.parse(localStorage.getItem('sf_devis_list')||'[]');
+  const idx = saved.findIndex(d=>d.id===EDIT_ID);
+  if (idx>=0) {
+    saved[idx] = {...saved[idx], ...updated};
+  } else {
+    saved.unshift({...updated, id:EDIT_ID});
+  }
+  localStorage.setItem('sf_devis_list', JSON.stringify(saved));
+  closeEditModal();
+  renderDevisList();
+  showToast('✅ Devis mis à jour avec succès !','success');
+}
+
+/* ─── ÉDITER FACTURE ─── */
+function editerFacture(id) {
+  const f = getAllFactures().find(x=>x.id===id);
+  if (!f) return;
+  EDIT_TYPE = 'facture'; EDIT_ID = id;
+  editLines = (f.lines||[]).map((l,i)=>({id:i+1,...l}));
+  editLid   = editLines.length;
+
+  document.getElementById('edit-title').textContent = '✏️ Modifier ' + f.ref;
+  document.getElementById('edit-body').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <div class="field" style="margin:0"><label>Référence</label><div class="iw"><span class="ic">🔢</span><input id="ef-ref" value="${f.ref||''}" readonly style="background:var(--bg)"></div></div>
+      <div class="field" style="margin:0"><label>Date</label><div class="iw"><span class="ic">📅</span><input type="date" id="ef-date" value="${f.date||''}"></div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <div class="field" style="margin:0"><label>Client</label><div class="iw"><span class="ic">🏢</span><input id="ef-client" value="${f.client_nom||''}"></div></div>
+      <div class="field" style="margin:0"><label>Matricule fiscal</label><div class="iw"><span class="ic">🔢</span><input id="ef-mf" value="${f.mf||''}"></div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <div class="field" style="margin:0"><label>Téléphone</label><div class="iw"><span class="ic">📞</span><input id="ef-tel" value="${f.tel||''}"></div></div>
+      <div class="field" style="margin:0"><label>Adresse</label><div class="iw"><span class="ic">📍</span><input id="ef-adr" value="${f.adr||''}"></div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <div class="field" style="margin:0"><label>Statut</label><div class="iw"><span class="ic">📌</span><select id="ef-statut">
+        <option value="emise"   ${f.statut==='emise'?'selected':''}>📤 Émise</option>
+        <option value="payee"   ${f.statut==='payee'?'selected':''}>✅ Payée</option>
+        <option value="retard"  ${f.statut==='retard'?'selected':''}>⚠️ En retard</option>
+        <option value="annulee" ${f.statut==='annulee'?'selected':''}>❌ Annulée</option>
+      </select></div></div>
+      <div class="field" style="margin:0"><label>Remise (%)</label><div class="iw"><span class="ic">🏷️</span><input type="number" id="ef-remise" value="${f.remise||0}" min="0" max="100"></div></div>
+    </div>
+    <div class="field" style="margin-bottom:14px"><label>Mode paiement</label><div class="iw"><span class="ic">💳</span><select id="ef-mode">
+      <option ${f.mode==='Virement bancaire'?'selected':''}>Virement bancaire</option>
+      <option ${f.mode==='Chèque'?'selected':''}>Chèque</option>
+      <option ${f.mode==='Espèces'?'selected':''}>Espèces</option>
+    </select></div></div>
+
+    <!-- LIGNES -->
+    <div style="border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:14px">
+      <div style="background:var(--brand);color:#fff;padding:10px 14px;font-size:12px;font-weight:700;display:flex;justify-content:space-between;align-items:center">
+        <span>📋 Lignes de services</span>
+        <button onclick="addEditLine()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:6px;color:#fff;font-size:12px;font-weight:600;padding:4px 10px;cursor:pointer;font-family:'Inter',sans-serif">＋ Ajouter</button>
+      </div>
+      <div style="padding:12px">
+        <div style="display:grid;grid-template-columns:1fr 70px 110px 90px 32px;gap:8px;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--line)">
+          <span style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase">Service</span>
+          <span style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;text-align:center">Qté</span>
+          <span style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;text-align:right">Prix HT (DT)</span>
+          <span style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;text-align:right">Total HT</span>
+          <span></span>
+        </div>
+        <div id="edit-lines-wrap"></div>
+      </div>
+      <div style="background:var(--bg);padding:10px 14px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:14px">
+        <span style="font-size:12px;color:var(--muted)">HT : <b id="ed-ht" style="color:var(--brand)">0 DT</b></span>
+        <span style="font-size:12px;color:var(--muted)">TVA : <b id="ed-tva" style="color:var(--brand)">0 DT</b></span>
+        <span style="font-size:13px;font-weight:800;color:var(--brand)">Net à payer : <span id="ed-ttc">0 DT</span></span>
+      </div>
+    </div>`;
+
+  renderEditLines();
+  document.getElementById('edit-foot').innerHTML = `
+    <button class="cancel" onclick="closeEditModal()">Annuler</button>
+    <button class="save" onclick="saveEditFacture()">✅ Enregistrer les modifications</button>`;
+  document.getElementById('edit-overlay').classList.add('show');
+}
+
+function saveEditFacture() {
+  const ht     = editLines.reduce((s,l)=>s+(parseFloat(l.qty)||0)*(parseFloat(l.price)||0),0);
+  const remPct = parseFloat(document.getElementById('ef-remise').value)||0;
+  const remise = ht*remPct/100;
+  const htF    = ht - remise;
+  const tva    = htF*0.2;
+  const net    = htF + tva + 1;
+
+  const updated = {
+    ref:        document.getElementById('ef-ref').value,
+    date:       document.getElementById('ef-date').value,
+    client_nom: document.getElementById('ef-client').value,
+    mf:         document.getElementById('ef-mf').value,
+    tel:        document.getElementById('ef-tel').value,
+    adr:        document.getElementById('ef-adr').value,
+    statut:     document.getElementById('ef-statut').value,
+    remise:     remPct,
+    mode:       document.getElementById('ef-mode').value,
+    lines:      editLines.map(l=>({service:l.service,qty:l.qty,price:l.price})),
+    net,
+  };
+
+  const saved = JSON.parse(localStorage.getItem('sf_factures_list')||'[]');
+  const idx = saved.findIndex(f=>f.id===EDIT_ID);
+  if (idx>=0) {
+    saved[idx] = {...saved[idx], ...updated};
+  } else {
+    saved.unshift({...updated, id:EDIT_ID});
+  }
+  localStorage.setItem('sf_factures_list', JSON.stringify(saved));
+  closeEditModal();
+  renderFacturesList();
+  showToast('✅ Facture mise à jour avec succès !','success');
+}
+
+/* ═══════════════════════════════════════
    LISTE DES FACTURES
 ═══════════════════════════════════════ */
 function getAllFactures() {
@@ -2027,6 +2309,7 @@ function renderFacturesList() {
       <td>
         <div style="display:flex;gap:5px">
           <button class="ic-btn" onclick="consultFacture(${f.id})" title="Consulter">👁️</button>
+          <button class="ic-btn" onclick="editerFacture(${f.id})" title="Modifier" style="color:var(--accent)">✏️</button>
           <button class="ic-btn" onclick="imprimerFacture(${f.id})" title="Imprimer">🖨️</button>
           <button class="ic-btn" onclick="emailFacture(${f.id})" title="Email" style="color:var(--violet)">📧</button>
           ${f.statut==='emise'?`<button class="ic-btn" onclick="marquerPayee(${f.id})" title="Marquer payée" style="color:var(--ok)">✅</button>`:''}
@@ -2655,6 +2938,7 @@ function renderDevisList() {
       <td>
         <div style="display:flex;gap:5px">
           <button class="ic-btn" onclick="consultDevis(${d.id})" title="Consulter">👁️</button>
+          <button class="ic-btn" onclick="editerDevis(${d.id})" title="Modifier" style="color:var(--accent)">✏️</button>
           <button class="ic-btn" onclick="devisToFacture(${d.id})" title="Générer facture" style="color:var(--ok)">🧾</button>
           <button class="ic-btn" onclick="emailDevis(${d.id})" title="Envoyer email" style="color:var(--violet)">📧</button>
           ${isAdmin?`<button class="ic-btn del" onclick="deleteDevis(${d.id})" title="Supprimer">🗑️</button>`:''}
