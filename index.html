@@ -527,7 +527,7 @@ label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-trans
           <button class="qa-btn" onclick="nav('facture')"><div class="qa-ic" style="background:rgba(72,201,176,.12)">🧾</div><div class="qa-lbl">Générer facture</div><div class="qa-sub">Depuis devis accepté</div></button>
           <button class="qa-btn" onclick="nav('contacts')"><div class="qa-ic" style="background:rgba(124,58,237,.1)">🏢</div><div class="qa-lbl">Ajouter contact</div><div class="qa-sub">Client / Fournisseur</div></button>
           <button class="qa-btn" onclick="nav('bc')"><div class="qa-ic" style="background:rgba(217,119,6,.1)">📋</div><div class="qa-lbl">Analyser BC</div><div class="qa-sub">OCR + vérification</div></button>
-          <button class="qa-btn" onclick="nav('comptes')"><div class="qa-ic" style="background:rgba(220,38,38,.08)">🔐</div><div class="qa-lbl">Gérer comptes</div><div class="qa-sub">Commerciaux & accès</div></button>
+          <button class="qa-btn" onclick="nav('comptes')"><div class="qa-ic" style="background:rgba(220,38,38,.08)">🔐</div><div class="qa-lbl">Gérer comptes</div><div class="qa-sub">Effectifs & accès</div></button>
         </div>
         <div class="kpi-grid">
           <div class="kpi blue"><div class="kpi-ic">💰</div><div class="kpi-lbl">CA du mois (DT)</div><div class="kpi-val">84 200</div><div class="kpi-sub"><span class="delta up">↑ +18%</span> vs mois dernier</div></div>
@@ -1587,7 +1587,7 @@ function usePanier(dest){
 ═══════════════════════════════════════ */
 const CONTACT_TYPES={
   client:     {lbl:'Clients',     ic:'🏢',color:'var(--accent)',   bg:'rgba(46,134,193,.12)',   table:'clients'},
-  commercial: {lbl:'Commerciaux', ic:'💼',color:'var(--emerald)',  bg:'rgba(72,201,176,.12)',   table:'clients'},
+  commercial: {lbl:'Effectifs', ic:'💼',color:'var(--emerald)',  bg:'rgba(72,201,176,.12)',   table:'clients'},
   freelancer: {lbl:'Freelancers', ic:'🧑‍💻',color:'var(--violet)',   bg:'rgba(124,58,237,.1)',    table:'freelancers'},
   fournisseur:{lbl:'Fournisseurs',ic:'🏭',color:'var(--amber)',    bg:'rgba(217,119,6,.1)',     table:'fournisseurs'},
 };
