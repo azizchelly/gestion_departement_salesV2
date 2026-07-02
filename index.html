@@ -822,6 +822,74 @@ label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-trans
         </div>
       </div>
 
+      <!-- SECTION : LISTE DES DEVIS -->
+      <div class="section" id="sec-devis-list">
+        <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center">
+          <div class="search-wrap" style="flex:1;min-width:200px;margin:0"><span class="s-ic">🔍</span><input type="text" id="dl-search" placeholder="Rechercher un devis…" oninput="renderDevisList()"></div>
+          <select id="dl-filter-statut" onchange="renderDevisList()" style="padding:9px 14px;border:1.5px solid var(--line);border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;outline:none;background:#fff">
+            <option value="">Tous les statuts</option>
+            <option value="brouillon">Brouillon</option>
+            <option value="envoye">Envoyé</option>
+            <option value="accepté">Accepté</option>
+            <option value="refusé">Refusé</option>
+            <option value="expiré">Expiré</option>
+          </select>
+          <button class="btn primary" onclick="nav('devis')">＋ Nouveau devis</button>
+        </div>
+
+        <!-- KPIs -->
+        <div class="kpi-grid" style="margin-bottom:18px">
+          <div class="kpi blue" style="margin:0"><div class="kpi-ic">📄</div><div class="kpi-lbl">Total devis</div><div class="kpi-val" id="dlk-total">0</div></div>
+          <div class="kpi green" style="margin:0"><div class="kpi-ic">✅</div><div class="kpi-lbl">Acceptés</div><div class="kpi-val" id="dlk-accepted">0</div></div>
+          <div class="kpi amber" style="margin:0"><div class="kpi-ic">📤</div><div class="kpi-lbl">En attente</div><div class="kpi-val" id="dlk-pending">0</div></div>
+          <div class="kpi violet" style="margin:0"><div class="kpi-ic">💰</div><div class="kpi-lbl">Montant total (DT)</div><div class="kpi-val" id="dlk-total-amt">0</div></div>
+        </div>
+
+        <div class="card">
+          <div class="card-h">
+            <div class="card-h-l"><div class="cdot"></div><h2>Tous les devis</h2></div>
+            <span id="dl-count" style="font-size:12px;font-weight:700;color:var(--muted)">0 devis</span>
+          </div>
+          <div class="card-b" style="padding:0">
+            <table class="tbl" id="dl-table">
+              <thead>
+                <tr>
+                  <th>Référence</th>
+                  <th>Client</th>
+                  <th>Commercial</th>
+                  <th>Date</th>
+                  <th>Validité</th>
+                  <th>Montant TTC (DT)</th>
+                  <th>Statut</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="dl-body"></tbody>
+            </table>
+            <div id="dl-empty" class="empty" style="display:none">
+              <div class="empty-ic">📄</div>
+              <b>Aucun devis trouvé</b>
+              Créez votre premier devis en cliquant sur "+ Nouveau devis"
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL CONSULTATION DEVIS -->
+      <div class="overlay" id="dv-consult-overlay">
+        <div class="modal" style="max-width:720px">
+          <div class="modal-h" style="position:sticky;top:0;background:#fff;z-index:1">
+            <h3 id="dvc-title">Consultation devis</h3>
+            <div style="display:flex;gap:8px">
+              <button onclick="imprimerConsult()" style="background:linear-gradient(135deg,var(--ok),#13784f);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer">🖨️ Imprimer</button>
+              <button onclick="emailConsult()" style="background:linear-gradient(135deg,var(--violet),#5B21B6);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer">📧 Email</button>
+              <button class="modal-close" onclick="document.getElementById('dv-consult-overlay').classList.remove('show')">✕</button>
+            </div>
+          </div>
+          <div id="dvc-content" style="padding:24px"></div>
+        </div>
+      </div>
+
       <!-- SECTION : BON DE COMMANDE -->
       <div class="section" id="sec-bc">
         <div style="display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start">
@@ -1025,6 +1093,7 @@ function nav(section){
   if(section==='devis') initDevis();
   if(section==='facture') initFacture();
   if(section==='comptes') renderComptes();
+  if(section==='devis-list') renderDevisList();
   if(section==='dash-com') setTimeout(()=>{document.getElementById('com-prog-bar').style.width='64%'},300);
 }
 
@@ -1056,7 +1125,8 @@ function buildSidebar(){
     {nav:dash, ic:'📊', lbl:'Dashboard'},
     ...(isAdmin ? [{nav:'contacts', ic:'👥', lbl:'Contacts'}] : []),
     {sec:'COMMERCIAL'},
-    {nav:'devis',    ic:'📄', lbl: isAdmin ? 'Devis' : 'Mes Devis'},
+    {nav:'devis',    ic:'📄', lbl: isAdmin ? 'Nouveau Devis' : 'Nouveau Devis'},
+    {nav:'devis-list',ic:'📋', lbl: isAdmin ? 'Liste des Devis' : 'Mes Devis'},
     {nav:'facture',  ic:'🧾', lbl: isAdmin ? 'Factures' : 'Mes Factures'},
     {nav:'bc',       ic:'📋', lbl:'Bons de commande'},
     {nav:'catalogue',ic:'📦', lbl:'Catalogue'},
@@ -1522,9 +1592,14 @@ async function saveDv(statut){
   if(!APP.dvLines.some(l=>l.service&&l.price>0)){showToast('Ajoute au moins un service','error');return;}
   const d=buildDvData(statut);
   try{
-    await sbInsert('devis',{ref:d.ref,client_nom:d.client_nom,client_email:d.client_email,commercial:d.commercial,statut:d.statut,total_ttc:d.total_ttc});
-    showToast('✅ Devis '+d.ref+' '+(statut==='envoye'?'envoyé':'sauvegardé')+'!','success');
+    try { await sbInsert('devis',{ref:d.ref,client_nom:d.client_nom,client_email:d.client_email,commercial:d.commercial,statut:d.statut,total_ttc:d.total_ttc}); } catch(e){}
+    // Sauvegarder dans localStorage pour la liste
+    const saved = JSON.parse(localStorage.getItem('sf_devis_list')||'[]');
+    const newDv = {...d, id:Date.now()};
+    saved.unshift(newDv);
+    localStorage.setItem('sf_devis_list', JSON.stringify(saved));
     localStorage.setItem('sf_last_devis',JSON.stringify(d));
+    showToast('✅ Devis '+d.ref+' '+(statut==='envoye'?'envoyé':'sauvegardé')+'!','success');
     if(statut==='envoye') setTimeout(()=>previewDv(),800);
   } catch(e){ showToast('Erreur: '+e.message,'error'); }
 }
@@ -1729,6 +1804,229 @@ function copyText(id){navigator.clipboard.writeText(document.getElementById(id).
 /* ═══════════════════════════════════════
    MONTANT EN LETTRES
 ═══════════════════════════════════════ */
+/* ═══════════════════════════════════════
+   LISTE DES DEVIS
+═══════════════════════════════════════ */
+let DEVIS_LIST = [];
+let CURRENT_CONSULT = null;
+
+// Données démo + données sauvegardées dans localStorage
+function getAllDevis() {
+  const saved = JSON.parse(localStorage.getItem('sf_devis_list') || '[]');
+  const demo = [
+    {id:1, ref:'DEV-2026-001', client_nom:'DataCore SARL',    client_email:'contact@datacore.tn',    client_contact:'Mohamed Ben Ali', commercial:'Aziz Chelly',   date_devis:'2026-06-01', validite:30, statut:'accepté',  total_ttc:42000,  objet:'Développement ERP sur mesure',    lines:[{service:'Développement ERP sur mesure',qty:1,price:35000},{service:'Formation DevOps',qty:5,price:600}], mode_paiement:'Virement bancaire', delai_paiement:'30 jours', conditions:'Livraison en 3 phases'},
+    {id:2, ref:'DEV-2026-002', client_nom:'FinTech TN',       client_email:'sara@fintechtn.com',      client_contact:'Sara Jebali',     commercial:'Aziz Chelly',   date_devis:'2026-06-05', validite:30, statut:'envoye',   total_ttc:21600,  objet:'Migration cloud AWS',             lines:[{service:'Migration cloud AWS',qty:1,price:8200},{service:'Infogérance mensuelle',qty:12,price:1200}], mode_paiement:'Virement bancaire', delai_paiement:'30 jours', conditions:''},
+    {id:3, ref:'DEV-2026-003', client_nom:'BTP Conseil',      client_email:'karim@btpconseil.tn',     client_contact:'Karim Mrad',      commercial:'Aziz Chelly',   date_devis:'2026-06-08', validite:30, statut:'envoye',   total_ttc:28800,  objet:'Portail web RH',                  lines:[{service:'Développement portail web',qty:1,price:4900},{service:'Conseil & Audit SI',qty:20,price:950}], mode_paiement:'Chèque', delai_paiement:'15 jours', conditions:''},
+    {id:4, ref:'DEV-2026-004', client_nom:'SudTech SARL',     client_email:'ali@sudtech.tn',          client_contact:'Ali Khelil',      commercial:'Aziz Chelly',   date_devis:'2026-06-10', validite:15, statut:'expiré',   total_ttc:14400,  objet:'Audit cybersécurité',             lines:[{service:'Audit cybersécurité',qty:1,price:3500},{service:'Formation Cybersécurité',qty:5,price:450}], mode_paiement:'Virement bancaire', delai_paiement:'30 jours', conditions:''},
+    {id:5, ref:'DEV-2026-005', client_nom:'MediaPlus',        client_email:'rym@mediaplus.tn',        client_contact:'Rym Gafsi',       commercial:'Youssef Khazri', date_devis:'2026-06-12', validite:30, statut:'refusé',   total_ttc:9600,   objet:'Développement mobile',            lines:[{service:'Développement mobile',qty:1,price:6500},{service:'Maintenance corrective',qty:2,price:800}], mode_paiement:'Virement bancaire', delai_paiement:'30 jours', conditions:''},
+    {id:6, ref:'DEV-2026-006', client_nom:'DataCore SARL',    client_email:'contact@datacore.tn',     client_contact:'Mohamed Ben Ali', commercial:'Youssef Khazri', date_devis:'2026-06-15', validite:30, statut:'accepté',  total_ttc:57600,  objet:'Infrastructure Cloud complète',   lines:[{service:'Migration cloud AWS',qty:1,price:8200},{service:'Infogérance mensuelle',qty:24,price:1200},{service:'Conseil & Audit SI',qty:10,price:950}], mode_paiement:'Virement bancaire', delai_paiement:'60 jours', conditions:'Contrat cadre 2 ans'},
+    {id:7, ref:'DEV-2026-007', client_nom:'FinTech TN',       client_email:'sara@fintechtn.com',      client_contact:'Sara Jebali',     commercial:'Aziz Chelly',   date_devis:'2026-06-18', validite:30, statut:'brouillon', total_ttc:7200,  objet:'Formation équipe DevOps',         lines:[{service:'Formation DevOps',qty:5,price:600},{service:'Conseil & Audit SI',qty:2,price:950}], mode_paiement:'Virement bancaire', delai_paiement:'30 jours', conditions:''},
+    {id:8, ref:'DEV-2026-008', client_nom:'BTP Conseil',      client_email:'karim@btpconseil.tn',     client_contact:'Karim Mrad',      commercial:'Aziz Chelly',   date_devis:'2026-06-20', validite:30, statut:'envoye',   total_ttc:31200,  objet:'ERP Gestion de chantiers',        lines:[{service:'Développement ERP sur mesure',qty:1,price:18000},{service:'Formation DevOps',qty:3,price:600},{service:'Maintenance corrective',qty:6,price:800}], mode_paiement:'Chèque', delai_paiement:'45 jours', conditions:''},
+  ];
+  // Fusionner démo + sauvegardés (éviter doublons par ref)
+  const refs = new Set(saved.map(d=>d.ref));
+  return [...demo.filter(d=>!refs.has(d.ref)), ...saved].sort((a,b)=>b.id-a.id);
+}
+
+function renderDevisList() {
+  DEVIS_LIST = getAllDevis();
+  const isAdmin = APP.role === 'admin';
+  const q = (document.getElementById('dl-search')?.value || '').toLowerCase();
+  const filterStatut = document.getElementById('dl-filter-statut')?.value || '';
+
+  let filtered = DEVIS_LIST.filter(d => {
+    const matchQ = !q || d.ref.toLowerCase().includes(q) || d.client_nom.toLowerCase().includes(q) || (d.commercial||'').toLowerCase().includes(q);
+    const matchS = !filterStatut || d.statut === filterStatut;
+    // Commercial voit seulement ses devis
+    const matchC = isAdmin || d.commercial === APP.name;
+    return matchQ && matchS && matchC;
+  });
+
+  // KPIs
+  document.getElementById('dlk-total').textContent = filtered.length;
+  document.getElementById('dlk-accepted').textContent = filtered.filter(d=>d.statut==='accepté').length;
+  document.getElementById('dlk-pending').textContent = filtered.filter(d=>d.statut==='envoye').length;
+  document.getElementById('dlk-total-amt').textContent = fmt(filtered.reduce((s,d)=>s+(d.total_ttc||0),0));
+  document.getElementById('dl-count').textContent = filtered.length + ' devis';
+
+  const tbody = document.getElementById('dl-body');
+  const empty = document.getElementById('dl-empty');
+
+  if (!filtered.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  const statusCfg = {
+    'brouillon': {cls:'draft',   lbl:'💾 Brouillon'},
+    'envoye':    {cls:'sent',    lbl:'📤 Envoyé'},
+    'accepté':   {cls:'ok',      lbl:'✅ Accepté'},
+    'refusé':    {cls:'late',    lbl:'❌ Refusé'},
+    'expiré':    {cls:'inactif', lbl:'⏱ Expiré'},
+  };
+
+  tbody.innerHTML = filtered.map(d => {
+    const sc = statusCfg[d.statut] || {cls:'draft',lbl:d.statut};
+    const expDate = new Date(d.date_devis);
+    expDate.setDate(expDate.getDate() + parseInt(d.validite||30));
+    const isExpired = new Date() > expDate && d.statut === 'envoye';
+    return `<tr>
+      <td><b style="color:var(--brand)">${d.ref}</b></td>
+      <td>
+        <div style="font-weight:600">${d.client_nom}</div>
+        <div style="font-size:11px;color:var(--muted)">${d.client_email||''}</div>
+      </td>
+      <td style="font-size:12px;color:var(--muted)">${d.commercial||'—'}</td>
+      <td style="font-size:12px">${d.date_devis||'—'}</td>
+      <td style="font-size:12px;color:${isExpired?'var(--bad)':'var(--muted)'}">${d.validite||30} jours${isExpired?' ⚠️':''}</td>
+      <td style="font-weight:700;color:var(--brand)">${fmt(d.total_ttc)} DT</td>
+      <td><span class="badge ${sc.cls}">${sc.lbl}</span></td>
+      <td>
+        <div style="display:flex;gap:5px">
+          <button class="ic-btn" onclick="consultDevis(${d.id})" title="Consulter">👁️</button>
+          ${d.statut==='accepté'?`<button class="ic-btn" onclick="devisToFacture(${d.id})" title="Générer facture" style="color:var(--ok)">🧾</button>`:''}
+          ${d.statut==='envoye'||d.statut==='brouillon'?`<button class="ic-btn" onclick="emailDevis(${d.id})" title="Envoyer email" style="color:var(--violet)">📧</button>`:''}
+          ${isAdmin?`<button class="ic-btn del" onclick="deleteDevis(${d.id})" title="Supprimer">🗑️</button>`:''}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function consultDevis(id) {
+  const d = DEVIS_LIST.find(x=>x.id===id);
+  if(!d) return;
+  CURRENT_CONSULT = d;
+  document.getElementById('dvc-title').textContent = d.ref + ' — ' + d.client_nom;
+  const lines = (d.lines||[]).filter(l=>l.service);
+  const ht = lines.reduce((s,l)=>s+(parseFloat(l.qty)||0)*(parseFloat(l.price)||0),0);
+  const tva = ht*0.2, ttc = ht+tva;
+  const rows = lines.map(l=>`<tr><td style="padding:8px;border-bottom:1px solid #eee">${l.service}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center">${l.qty}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">${fmt(l.price)} DT</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right;font-weight:700">${fmt((l.qty||0)*(l.price||0))} DT</td></tr>`).join('');
+  const statusColors = {'accepté':'#E6F7EF','envoye':'rgba(46,134,193,.1)','refusé':'#FDECEC','brouillon':'#f4f7fb','expiré':'#FEF3E2'};
+  const statusLabels = {'accepté':'✅ Accepté','envoye':'📤 Envoyé','refusé':'❌ Refusé','brouillon':'💾 Brouillon','expiré':'⏱ Expiré'};
+
+  document.getElementById('dvc-content').innerHTML = `
+    <div style="font-family:Arial,sans-serif">
+      <!-- En-tête -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:14px;border-bottom:3px solid var(--brand)">
+        <div>
+          <div style="font-size:22px;font-weight:900;color:var(--brand)">SalesFlow <span style="color:var(--accent)">Pro</span></div>
+          <div style="font-size:11px;color:#888;margin-top:3px">Services Informatiques · Tunis · contact@salesflowpro.tn</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:20px;font-weight:800;color:var(--brand)">DEVIS</div>
+          <div style="font-size:14px;font-weight:700;color:var(--accent)">${d.ref}</div>
+          <div style="font-size:11px;color:#888">Date : ${d.date_devis} · Valide ${d.validite||30} jours</div>
+          <div style="margin-top:5px;display:inline-block;padding:3px 10px;border-radius:8px;background:${statusColors[d.statut]||'#f4f7fb'};font-size:11px;font-weight:700">${statusLabels[d.statut]||d.statut}</div>
+        </div>
+      </div>
+
+      <!-- Émetteur / Destinataire -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">
+        <div style="background:#f4f7fb;border-radius:8px;padding:13px">
+          <div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;margin-bottom:6px">Émetteur</div>
+          <div style="font-weight:800;color:var(--brand)">${d.commercial||'SalesFlow Pro'}</div>
+          <div style="font-size:12px;color:#555;margin-top:3px">SalesFlow Pro<br>contact@salesflowpro.tn</div>
+        </div>
+        <div style="background:#f4f7fb;border-radius:8px;padding:13px">
+          <div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;margin-bottom:6px">Destinataire</div>
+          <div style="font-weight:800;color:var(--brand)">${d.client_nom||'—'}</div>
+          <div style="font-size:12px;color:#555;margin-top:3px">${d.client_contact||''}<br>${d.client_email||''}</div>
+        </div>
+      </div>
+
+      ${d.objet?`<div style="background:#EBF4FF;border-left:3px solid var(--accent);padding:10px 14px;margin-bottom:16px;font-size:13px;color:var(--brand)"><b>Objet :</b> ${d.objet}</div>`:''}
+
+      <!-- Tableau services -->
+      <table style="width:100%;border-collapse:collapse;margin-bottom:18px">
+        <thead><tr style="background:var(--brand);color:#fff">
+          <th style="padding:9px 8px;text-align:left;font-size:12px">Service / Description</th>
+          <th style="padding:9px 8px;text-align:center;font-size:12px;width:60px">Qté</th>
+          <th style="padding:9px 8px;text-align:right;font-size:12px;width:130px">P.U. HT</th>
+          <th style="padding:9px 8px;text-align:right;font-size:12px;width:130px">Total HT</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+
+      <!-- Totaux -->
+      <div style="display:flex;justify-content:flex-end">
+        <div style="width:270px">
+          <div style="display:flex;justify-content:space-between;padding:7px 0;font-size:13px;border-bottom:1px solid #eee"><span style="color:#888">Total HT</span><span style="font-weight:700">${fmt(ht)} DT</span></div>
+          <div style="display:flex;justify-content:space-between;padding:7px 0;font-size:13px;border-bottom:1px solid #eee"><span style="color:#888">TVA (20%)</span><span>${fmt(tva)} DT</span></div>
+          <div style="display:flex;justify-content:space-between;padding:12px;margin-top:8px;background:var(--brand);border-radius:7px">
+            <span style="font-weight:700;color:#fff;font-size:14px">TOTAL TTC</span>
+            <span style="font-weight:900;color:var(--emerald);font-size:18px">${fmt(ttc)} DT</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Conditions -->
+      ${d.conditions?`<div style="margin-top:16px;padding-top:12px;border-top:1px solid #eee;font-size:12px;color:#888"><b>Conditions :</b> ${d.conditions}</div>`:''}
+      <div style="margin-top:10px;font-size:12px;color:#888">Mode de paiement : <b>${d.mode_paiement||'—'}</b> · Délai : <b>${d.delai_paiement||'—'}</b></div>
+
+      <!-- Signatures -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:24px">
+        <div style="border:1px solid #ddd;border-radius:7px;padding:14px;text-align:center">
+          <div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;margin-bottom:5px">Bon pour accord — Client</div>
+          <div style="height:48px"></div>
+          <div style="border-top:1px solid #ccc;padding-top:6px;font-size:10px;color:#aaa">Signature & cachet</div>
+        </div>
+        <div style="border:1px solid #ddd;border-radius:7px;padding:14px;text-align:center">
+          <div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;margin-bottom:5px">Émetteur — ${d.commercial||''}</div>
+          <div style="height:48px"></div>
+          <div style="border-top:1px solid #ccc;padding-top:6px;font-size:10px;color:#aaa">Signature</div>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('dv-consult-overlay').classList.add('show');
+}
+
+function imprimerConsult() {
+  if(!CURRENT_CONSULT) return;
+  const content = document.getElementById('dvc-content').innerHTML;
+  const win = window.open('','_blank');
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+CURRENT_CONSULT.ref+'</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;padding:24px;color:#111}:root{--brand:#1E3A5F;--accent:#2E86C1;--emerald:#48C9B0}</style></head><body>'+content+'<script>window.onload=function(){window.print();}<\/script></body></html>');
+  win.document.close();
+}
+
+function emailDevis(id) {
+  const d = DEVIS_LIST.find(x=>x.id===id);
+  if(!d) return;
+  if(!d.client_email){showToast('Email client non renseigné','error');return;}
+  const lines = (d.lines||[]).filter(l=>l.service);
+  const ht = lines.reduce((s,l)=>s+(parseFloat(l.qty)||0)*(parseFloat(l.price)||0),0);
+  const tva=ht*0.2, ttc=ht+tva;
+  const lignes = lines.map(l=>'  • '+l.service+' (x'+l.qty+') : '+fmt((l.qty||0)*(l.price||0))+' DT HT').join('\n');
+  const sujet = encodeURIComponent('Devis '+d.ref+' — SalesFlow Pro');
+  const corps = encodeURIComponent('Bonjour '+d.client_contact+',\n\nVeuillez trouver ci-dessous le devis '+d.ref+'.\n\nServices :\n'+lignes+'\n\nTotal HT : '+fmt(ht)+' DT\nTVA (20%) : '+fmt(tva)+' DT\nTOTAL TTC : '+fmt(ttc)+' DT\n\nMode de paiement : '+(d.mode_paiement||'—')+' — '+(d.delai_paiement||'—')+'\n\nCordialement,\n'+(d.commercial||APP.name)+'\nSalesFlow Pro');
+  window.open('mailto:'+encodeURIComponent(d.client_email)+'?subject='+sujet+'&body='+corps);
+  showToast('📧 Email ouvert pour '+d.client_nom,'success');
+}
+
+function emailConsult() {
+  if(CURRENT_CONSULT) emailDevis(CURRENT_CONSULT.id);
+}
+
+function devisToFacture(id) {
+  const d = DEVIS_LIST.find(x=>x.id===id);
+  if(!d) return;
+  localStorage.setItem('sf_last_devis', JSON.stringify(d));
+  document.getElementById('dv-consult-overlay').classList.remove('show');
+  nav('facture');
+  showToast('✅ Devis '+d.ref+' chargé dans la facture','success');
+}
+
+function deleteDevis(id) {
+  if(!confirm('Supprimer ce devis ?')) return;
+  const saved = JSON.parse(localStorage.getItem('sf_devis_list')||'[]');
+  const updated = saved.filter(d=>d.id!==id);
+  localStorage.setItem('sf_devis_list', JSON.stringify(updated));
+  renderDevisList();
+  showToast('🗑️ Devis supprimé','warn');
+}
+
 function enLettres(n){
   const u=['','un','deux','trois','quatre','cinq','six','sept','huit','neuf','dix','onze','douze','treize','quatorze','quinze','seize','dix-sept','dix-huit','dix-neuf'];
   const d=['','','vingt','trente','quarante','cinquante','soixante','soixante','quatre-vingt','quatre-vingt'];
