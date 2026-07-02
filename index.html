@@ -1612,7 +1612,17 @@ function renderContactForm(){
 }
 function setContactType(k){ APP.currentContact=k; renderContactForm(); }
 function getContactList(type){
-  if(type==='client'||type==='commercial') return APP.clients;
+  if(type==='client') return APP.clients;
+  if(type==='commercial') {
+    // Liste des commerciaux = comptes de l'équipe sales
+    const commerciaux = [
+      {id:'c1', nom:'Youssef Khazri',  prenom:'Youssef', nom_famille:'Khazri',  email:'youssef.khazri@draexlmaier.com', telephone:'+216 XX XXX XXX', statut:'actif', role:'admin'},
+      {id:'c2', nom:'Aziz Chelly',     prenom:'Aziz',    nom_famille:'Chelly',   email:'aziz.chelly@esprit.tn',          telephone:'+216 XX XXX XXX', statut:'actif', role:'commercial'},
+    ];
+    // Ajouter les comptes créés par admin
+    const saved = JSON.parse(localStorage.getItem('sf_comptes_commerciaux')||'[]');
+    return [...commerciaux, ...saved];
+  }
   if(type==='freelancer') return APP.freelancers;
   if(type==='fournisseur') return APP.fournisseurs;
   return [];
@@ -1683,11 +1693,12 @@ function renderContactList(){
   document.getElementById('cl-list').innerHTML=filtered.map(c=>{
     const name=c.nom||(c.prenom+' '+c.nom)||'—';
     const sub=c.email||c.expertise||'';
+    const isAdminView = APP.role === 'admin';
     return `<div class="contact-item">
       <div class="c-av" style="background:${ct.color}">${name.charAt(0).toUpperCase()}</div>
       <div style="flex:1"><div class="c-name">${name}</div><div class="c-sub">${sub}</div></div>
       <span class="badge ${c.statut||'actif'}">${c.statut||'actif'}</span>
-      <button class="ic-btn del" onclick="deleteContact('${ct.table}',${c.id})" style="margin-left:8px">🗑️</button>
+      ${isAdminView ? `<button class="ic-btn del" onclick="deleteContact('${ct.table}',${c.id})" style="margin-left:8px">🗑️</button>` : ''}
     </div>`;
   }).join('');
 }
@@ -2106,7 +2117,14 @@ function createAccount(){
   const pw=document.getElementById('nc-pw').value.trim();
   if(!name||!email||!pw){showToast('Remplis tous les champs obligatoires','error');return;}
   if(pw.length<6){showToast('Mot de passe trop court (min 6 car.)','error');return;}
-  APP.comptes.push({id:Date.now(),name,email,role:APP.newRole,statut:'actif',pw,created:new Date().toLocaleDateString('fr-FR')});
+  const newCompte = {id:Date.now(),name,email,role:APP.newRole,statut:'actif',pw,created:new Date().toLocaleDateString('fr-FR')};
+  APP.comptes.push(newCompte);
+  // Sauvegarder dans la liste des commerciaux si role=commercial
+  if(APP.newRole==='commercial'){
+    const saved = JSON.parse(localStorage.getItem('sf_comptes_commerciaux')||'[]');
+    saved.push({id:newCompte.id, nom:name, email, telephone:'', statut:'actif', role:'commercial'});
+    localStorage.setItem('sf_comptes_commerciaux', JSON.stringify(saved));
+  }
   document.getElementById('nc-cred-email').textContent=email;
   document.getElementById('nc-cred-pw').textContent=pw;
   document.getElementById('nc-cred-role').textContent=APP.newRole==='admin'?'🛡️ Admin':'💼 Commercial';
