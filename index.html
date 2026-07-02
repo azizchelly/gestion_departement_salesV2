@@ -1814,14 +1814,14 @@ let CURRENT_CONSULT = null;
 function getAllDevis() {
   const saved = JSON.parse(localStorage.getItem('sf_devis_list') || '[]');
   const demo = [
-    {id:1, ref:'DEV-2026-001', client_nom:'DataCore SARL',    client_email:'contact@datacore.tn',    client_contact:'Mohamed Ben Ali', commercial:'Aziz Chelly',   date_devis:'2026-06-01', validite:30, statut:'accepté',  total_ttc:42000,  objet:'Développement ERP sur mesure',    lines:[{service:'Développement ERP sur mesure',qty:1,price:35000},{service:'Formation DevOps',qty:5,price:600}], mode_paiement:'Virement bancaire', delai_paiement:'30 jours', conditions:'Livraison en 3 phases'},
-    {id:2, ref:'DEV-2026-002', client_nom:'FinTech TN',       client_email:'sara@fintechtn.com',      client_contact:'Sara Jebali',     commercial:'Aziz Chelly',   date_devis:'2026-06-05', validite:30, statut:'envoye',   total_ttc:21600,  objet:'Migration cloud AWS',             lines:[{service:'Migration cloud AWS',qty:1,price:8200},{service:'Infogérance mensuelle',qty:12,price:1200}], mode_paiement:'Virement bancaire', delai_paiement:'30 jours', conditions:''},
-    {id:3, ref:'DEV-2026-003', client_nom:'BTP Conseil',      client_email:'karim@btpconseil.tn',     client_contact:'Karim Mrad',      commercial:'Aziz Chelly',   date_devis:'2026-06-08', validite:30, statut:'envoye',   total_ttc:28800,  objet:'Portail web RH',                  lines:[{service:'Développement portail web',qty:1,price:4900},{service:'Conseil & Audit SI',qty:20,price:950}], mode_paiement:'Chèque', delai_paiement:'15 jours', conditions:''},
-    {id:4, ref:'DEV-2026-004', client_nom:'SudTech SARL',     client_email:'ali@sudtech.tn',          client_contact:'Ali Khelil',      commercial:'Aziz Chelly',   date_devis:'2026-06-10', validite:15, statut:'expiré',   total_ttc:14400,  objet:'Audit cybersécurité',             lines:[{service:'Audit cybersécurité',qty:1,price:3500},{service:'Formation Cybersécurité',qty:5,price:450}], mode_paiement:'Virement bancaire', delai_paiement:'30 jours', conditions:''},
-    {id:5, ref:'DEV-2026-005', client_nom:'MediaPlus',        client_email:'rym@mediaplus.tn',        client_contact:'Rym Gafsi',       commercial:'Youssef Khazri', date_devis:'2026-06-12', validite:30, statut:'refusé',   total_ttc:9600,   objet:'Développement mobile',            lines:[{service:'Développement mobile',qty:1,price:6500},{service:'Maintenance corrective',qty:2,price:800}], mode_paiement:'Virement bancaire', delai_paiement:'30 jours', conditions:''},
-    {id:6, ref:'DEV-2026-006', client_nom:'DataCore SARL',    client_email:'contact@datacore.tn',     client_contact:'Mohamed Ben Ali', commercial:'Youssef Khazri', date_devis:'2026-06-15', validite:30, statut:'accepté',  total_ttc:57600,  objet:'Infrastructure Cloud complète',   lines:[{service:'Migration cloud AWS',qty:1,price:8200},{service:'Infogérance mensuelle',qty:24,price:1200},{service:'Conseil & Audit SI',qty:10,price:950}], mode_paiement:'Virement bancaire', delai_paiement:'60 jours', conditions:'Contrat cadre 2 ans'},
-    {id:7, ref:'DEV-2026-007', client_nom:'FinTech TN',       client_email:'sara@fintechtn.com',      client_contact:'Sara Jebali',     commercial:'Aziz Chelly',   date_devis:'2026-06-18', validite:30, statut:'brouillon', total_ttc:7200,  objet:'Formation équipe DevOps',         lines:[{service:'Formation DevOps',qty:5,price:600},{service:'Conseil & Audit SI',qty:2,price:950}], mode_paiement:'Virement bancaire', delai_paiement:'30 jours', conditions:''},
-    {id:8, ref:'DEV-2026-008', client_nom:'BTP Conseil',      client_email:'karim@btpconseil.tn',     client_contact:'Karim Mrad',      commercial:'Aziz Chelly',   date_devis:'2026-06-20', validite:30, statut:'envoye',   total_ttc:31200,  objet:'ERP Gestion de chantiers',        lines:[{service:'Développement ERP sur mesure',qty:1,price:18000},{service:'Formation DevOps',qty:3,price:600},{service:'Maintenance corrective',qty:6,price:800}], mode_paiement:'Chèque', delai_paiement:'45 jours', conditions:''},
+    {id:1, ref:'DEV-2026-001', client_nom:'DataCore SARL',    client_email:'contact@datacore.tn',    client_contact:'Mohamed Ben Ali', commercial:'Aziz Chelly',   date_devis:'2026-06-01', validite:30, statut:'accepté',  total_ttc:45600,  objet:'Développement ERP sur mesure',    lines:[{service:'Développement ERP sur mesure',qty:1,price:35000},{service:'Formation DevOps',qty:5,price:600}], mode_paiement:'Virement bancaire', delai_paiement:'30 jours', conditions:'Livraison en 3 phases'},
+    {id:2, ref:'DEV-2026-002', client_nom:'FinTech TN',       client_email:'sara@fintechtn.com',      client_contact:'Sara Jebali',     commercial:'Aziz Chelly',   date_devis:'2026-06-05', validite:30, statut:'envoye',   total_ttc:27120,  objet:'Migration cloud AWS',             lines:[{service:'Migration cloud AWS',qty:1,price:8200},{service:'Infogérance mensuelle',qty:12,price:1200}], mode_paiement:'Virement bancaire', delai_paiement:'30 jours', conditions:''},
+    {id:3, ref:'DEV-2026-003', client_nom:'BTP Conseil',      client_email:'karim@btpconseil.tn',     client_contact:'Karim Mrad',      commercial:'Aziz Chelly',   date_devis:'2026-06-08', validite:30, statut:'envoye',   total_ttc:28680,  objet:'Portail web RH',                  lines:[{service:'Développement portail web',qty:1,price:4900},{service:'Conseil & Audit SI',qty:20,price:950}], mode_paiement:'Chèque', delai_paiement:'15 jours', conditions:''},
+    {id:4, ref:'DEV-2026-004', client_nom:'SudTech SARL',     client_email:'ali@sudtech.tn',          client_contact:'Ali Khelil',      commercial:'Aziz Chelly',   date_devis:'2026-06-10', validite:15, statut:'expiré',   total_ttc:6900,   objet:'Audit cybersécurité',             lines:[{service:'Audit cybersécurité',qty:1,price:3500},{service:'Formation Cybersécurité',qty:5,price:450}], mode_paiement:'Virement bancaire', delai_paiement:'30 jours', conditions:''},
+    {id:5, ref:'DEV-2026-005', client_nom:'MediaPlus',        client_email:'rym@mediaplus.tn',        client_contact:'Rym Gafsi',       commercial:'Youssef Khazri', date_devis:'2026-06-12', validite:30, statut:'refusé',   total_ttc:9720,   objet:'Développement mobile',            lines:[{service:'Développement mobile',qty:1,price:6500},{service:'Maintenance corrective',qty:2,price:800}], mode_paiement:'Virement bancaire', delai_paiement:'30 jours', conditions:''},
+    {id:6, ref:'DEV-2026-006', client_nom:'DataCore SARL',    client_email:'contact@datacore.tn',     client_contact:'Mohamed Ben Ali', commercial:'Youssef Khazri', date_devis:'2026-06-15', validite:30, statut:'accepté',  total_ttc:55800,  objet:'Infrastructure Cloud complète',   lines:[{service:'Migration cloud AWS',qty:1,price:8200},{service:'Infogérance mensuelle',qty:24,price:1200},{service:'Conseil & Audit SI',qty:10,price:950}], mode_paiement:'Virement bancaire', delai_paiement:'60 jours', conditions:'Contrat cadre 2 ans'},
+    {id:7, ref:'DEV-2026-007', client_nom:'FinTech TN',       client_email:'sara@fintechtn.com',      client_contact:'Sara Jebali',     commercial:'Aziz Chelly',   date_devis:'2026-06-18', validite:30, statut:'brouillon', total_ttc:5880,  objet:'Formation équipe DevOps',         lines:[{service:'Formation DevOps',qty:5,price:600},{service:'Conseil & Audit SI',qty:2,price:950}], mode_paiement:'Virement bancaire', delai_paiement:'30 jours', conditions:''},
+    {id:8, ref:'DEV-2026-008', client_nom:'BTP Conseil',      client_email:'karim@btpconseil.tn',     client_contact:'Karim Mrad',      commercial:'Aziz Chelly',   date_devis:'2026-06-20', validite:30, statut:'envoye',   total_ttc:29520,  objet:'ERP Gestion de chantiers',        lines:[{service:'Développement ERP sur mesure',qty:1,price:18000},{service:'Formation DevOps',qty:3,price:600},{service:'Maintenance corrective',qty:6,price:800}], mode_paiement:'Chèque', delai_paiement:'45 jours', conditions:''},
   ];
   // Fusionner démo + sauvegardés (éviter doublons par ref)
   const refs = new Set(saved.map(d=>d.ref));
@@ -1886,8 +1886,8 @@ function renderDevisList() {
       <td>
         <div style="display:flex;gap:5px">
           <button class="ic-btn" onclick="consultDevis(${d.id})" title="Consulter">👁️</button>
-          ${d.statut==='accepté'?`<button class="ic-btn" onclick="devisToFacture(${d.id})" title="Générer facture" style="color:var(--ok)">🧾</button>`:''}
-          ${d.statut==='envoye'||d.statut==='brouillon'?`<button class="ic-btn" onclick="emailDevis(${d.id})" title="Envoyer email" style="color:var(--violet)">📧</button>`:''}
+          <button class="ic-btn" onclick="devisToFacture(${d.id})" title="Générer facture" style="color:var(--ok)">🧾</button>
+          <button class="ic-btn" onclick="emailDevis(${d.id})" title="Envoyer email" style="color:var(--violet)">📧</button>
           ${isAdmin?`<button class="ic-btn del" onclick="deleteDevis(${d.id})" title="Supprimer">🗑️</button>`:''}
         </div>
       </td>
@@ -2014,8 +2014,20 @@ function devisToFacture(id) {
   if(!d) return;
   localStorage.setItem('sf_last_devis', JSON.stringify(d));
   document.getElementById('dv-consult-overlay').classList.remove('show');
+  // Naviguer vers facture et charger automatiquement
   nav('facture');
-  showToast('✅ Devis '+d.ref+' chargé dans la facture','success');
+  setTimeout(() => {
+    // Remplir les champs facture
+    const fcRef = document.getElementById('fc-ref');
+    const fcClient = document.getElementById('fc-client');
+    const fcMode = document.getElementById('fc-mode');
+    if(fcRef) fcRef.value = d.ref.replace('DEV','FACT');
+    if(fcClient) fcClient.value = d.client_nom || '';
+    if(fcMode) fcMode.value = d.mode_paiement || 'Virement bancaire';
+    factLines = (d.lines||[]).filter(l=>l.service);
+    updateFacture();
+    showToast('✅ Facture générée depuis '+d.ref,'success');
+  }, 200);
 }
 
 function deleteDevis(id) {
