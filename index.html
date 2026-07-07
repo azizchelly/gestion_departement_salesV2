@@ -1377,7 +1377,7 @@ function nav(section){
   if(section==='brouillons') renderBrouillons();
   if(section==='factures-list') renderFacturesList();
   if(section==='bc') initBC();
-  if(section==='dash-com') setTimeout(()=>{document.getElementById('com-prog-bar').style.width='64%'},300);
+  if(section==='dash-com') setTimeout(()=>{const el=document.getElementById('com-prog-bar'); if(el) el.style.width='64%';},300);
 }
 
 function setupTopbarActions(section){
@@ -1466,11 +1466,11 @@ async function doLogin(){
       showToast('⚠️ Connexion en mode démo (hors Supabase Auth) — données limitées','warn');
     }
     APP.role=role; APP.name=name; APP.email=email; APP.token=token;
+    await loadData();
     buildSidebar();
     showPage('pg-app');
     nav(role==='admin'?'dash-admin':'dash-com');
     showToast('✅ Bienvenue, '+name+' !','success');
-    await loadData();
   } catch(e){
     errEl.textContent=e.message||'Erreur de connexion';
     errEl.classList.add('show');
@@ -2399,13 +2399,10 @@ async function analyzeBCWithAI() {
   }, 500);
 }
 
-function acceptBC() {
+async function acceptBC() {
   if (!BC_DEVIS_REF) { showToast("Aucun devis sélectionné",'error'); return; }
-  showToast('✅ BC validé ! Chargement de la facture…','success');
-  setTimeout(()=>{
-    localStorage.setItem('sf_last_devis', JSON.stringify(BC_DEVIS_REF));
-    nav('facture');
-  }, 800);
+  showToast('✅ BC validé ! Génération de la facture…','success');
+  await devisToFacture(BC_DEVIS_REF.id);
 }
 
 /* ═══════════════════════════════════════
@@ -3662,25 +3659,49 @@ function emailConsult() {
   if(CURRENT_CONSULT) emailDevis(CURRENT_CONSULT.id);
 }
 
-function devisToFacture(id) {
-  const d = DEVIS_LIST.find(x=>x.id===id);
+async function devisToFacture(id) {
+  const d = DEVIS_LIST.find(x=>x.id===id) || getAllDevis().find(x=>x.id===id);
   if(!d) return;
-  localStorage.setItem('sf_last_devis', JSON.stringify(d));
   document.getElementById('dv-consult-overlay').classList.remove('show');
-  // Naviguer vers facture et charger automatiquement
-  nav('facture');
-  setTimeout(() => {
-    // Remplir les champs facture
-    const fcRef = document.getElementById('fc-ref');
-    const fcClient = document.getElementById('fc-client');
-    const fcMode = document.getElementById('fc-mode');
-    if(fcRef) fcRef.value = d.ref.replace('DEV','FACT');
-    if(fcClient) fcClient.value = d.client_nom || '';
-    if(fcMode) fcMode.value = d.mode_paiement || 'Virement bancaire';
-    factLines = (d.lines||[]).filter(l=>l.service);
-    updateFacture();
-    showToast('✅ Facture générée depuis '+d.ref,'success');
-  }, 200);
+  try{
+    const lignes = (d.lines||[]).filter(l=>l.service);
+    const ht = lignes.reduce((s,l)=>s+(parseFloat(l.qty)||0)*(parseFloat(l.price)||0),0);
+    const tva = ht*0.2, net = ht+tva+1;
+    const factRow = {
+      ref: d.ref.replace('DEV','FACT'),
+      devis_id: d.id,
+      devis_ref: d.ref,
+      client_nom: d.client_nom,
+      client_email: d.client_email,
+      mode: d.mode_paiement || 'Virement bancaire',
+      remise_pct: 0,
+      net: net,
+      statut: 'emise',
+      commercial: d.commercial || APP.name,
+      date_facture: new Date().toISOString().split('T')[0]
+    };
+    const inserted = await sbInsert('factures', factRow);
+    const newFact = Array.isArray(inserted)?inserted[0]:inserted;
+    if(lignes.length){
+      const factLignes = lignes.map(l=>({facture_id:newFact.id, service:l.service, qty:l.qty, price:l.price}));
+      await sbInsert('facture_lignes', factLignes);
+    }
+    await reloadFacturesCache();
+
+    // Pré-remplir et afficher la page facture pour aperçu/impression immédiats
+    nav('facture');
+    setTimeout(() => {
+      const fcRef = document.getElementById('fc-ref');
+      const fcClient = document.getElementById('fc-client');
+      const fcMode = document.getElementById('fc-mode');
+      if(fcRef) fcRef.value = factRow.ref;
+      if(fcClient) fcClient.value = factRow.client_nom || '';
+      if(fcMode) fcMode.value = factRow.mode;
+      factLines = lignes;
+      updateFacture();
+      showToast('✅ Facture '+factRow.ref+' créée et ajoutée à la liste','success');
+    }, 200);
+  } catch(e){ showToast('Erreur: '+e.message,'error'); }
 }
 
 async function deleteDevis(id) {
