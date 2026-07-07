@@ -1243,25 +1243,37 @@ const DEMO_USERS = [
   { email:"aziz.chelly@esprit.tn",          password:"azizchelly",    role:"commercial", name:"Aziz Chelly" },
 ];
 
+// Authorization: on utilise le token de session de l'utilisateur connecté
+// (APP.token) quand il existe, sinon on retombe sur la clé anon (accès public,
+// bloqué par RLS pour les tables sensibles une fois la migration SQL appliquée).
+function sbAuthHeader(){
+  return "Bearer "+(APP.token||SB_KEY);
+}
 async function sbGet(table, filters){
   let url = SB_URL+"/rest/v1/"+table+"?order=id.asc";
   if(filters) url+="&"+filters;
-  const r = await fetch(url,{headers:{"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY}});
+  const r = await fetch(url,{headers:{"apikey":SB_KEY,"Authorization":sbAuthHeader()}});
   if(!r.ok) throw new Error(await r.text());
   return await r.json();
 }
 async function sbInsert(table,data){
-  const r = await fetch(SB_URL+"/rest/v1/"+table,{method:"POST",headers:{"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY,"Content-Type":"application/json","Prefer":"return=representation"},body:JSON.stringify(data)});
+  const r = await fetch(SB_URL+"/rest/v1/"+table,{method:"POST",headers:{"apikey":SB_KEY,"Authorization":sbAuthHeader(),"Content-Type":"application/json","Prefer":"return=representation"},body:JSON.stringify(data)});
   if(!r.ok) throw new Error(await r.text());
   return await r.json();
 }
 async function sbUpdate(table,id,data){
-  const r = await fetch(SB_URL+"/rest/v1/"+table+"?id=eq."+id,{method:"PATCH",headers:{"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY,"Content-Type":"application/json"},body:JSON.stringify(data)});
+  const r = await fetch(SB_URL+"/rest/v1/"+table+"?id=eq."+id,{method:"PATCH",headers:{"apikey":SB_KEY,"Authorization":sbAuthHeader(),"Content-Type":"application/json"},body:JSON.stringify(data)});
   if(!r.ok) throw new Error(await r.text());
   return true;
 }
 async function sbDelete(table,id){
-  const r = await fetch(SB_URL+"/rest/v1/"+table+"?id=eq."+id,{method:"DELETE",headers:{"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY}});
+  const r = await fetch(SB_URL+"/rest/v1/"+table+"?id=eq."+id,{method:"DELETE",headers:{"apikey":SB_KEY,"Authorization":sbAuthHeader()}});
+  if(!r.ok) throw new Error(await r.text());
+  return true;
+}
+// Suppression avec filtre custom (ex: supprimer toutes les lignes d'un devis)
+async function sbDeleteWhere(table,filterQS){
+  const r = await fetch(SB_URL+"/rest/v1/"+table+"?"+filterQS,{method:"DELETE",headers:{"apikey":SB_KEY,"Authorization":sbAuthHeader()}});
   if(!r.ok) throw new Error(await r.text());
   return true;
 }
@@ -1276,11 +1288,51 @@ async function sbAuth(email,password){
    ÉTAT GLOBAL
 ═══════════════════════════════════════ */
 let APP = {
-  role: null, name: null, email: null,
+  role: null, name: null, email: null, token: null,
   catalogue: [], clients: [], fournisseurs: [], freelancers: [],
   comptes: [], currentContact: 'client', panier: {},
-  dvLines: [], dvRemise: false, newRole: 'commercial'
+  dvLines: [], dvRemise: false, newRole: 'commercial',
+  devis: null, factures: null, comptesDb: [], objectif: null
 };
+
+/* ═══════════════════════════════════════
+   DEVIS / FACTURES / COMPTES — SUPABASE (remplace localStorage)
+═══════════════════════════════════════ */
+async function reloadDevisCache(){
+  try{
+    const rows = await sbGet('devis','select=*,devis_lignes(*)');
+    APP.devis = rows;
+  } catch(e){ console.error('reloadDevisCache',e); if(APP.devis===null) APP.devis=[]; }
+}
+async function reloadFacturesCache(){
+  try{
+    const rows = await sbGet('factures','select=*,facture_lignes(*)');
+    APP.factures = rows;
+  } catch(e){ console.error('reloadFacturesCache',e); if(APP.factures===null) APP.factures=[]; }
+}
+async function reloadComptesCache(){
+  try{ APP.comptesDb = await sbGet('comptes'); } catch(e){ APP.comptesDb=[]; }
+}
+function mapDevisRow(d){
+  return {
+    id:d.id, ref:d.ref, date_devis:d.date_devis, validite:d.validite,
+    client_nom:d.client_nom, client_email:d.client_email, client_contact:d.client_contact,
+    commercial:d.commercial, objet:d.objet,
+    remise_pct:d.remise_pct, remise_mont:d.remise_montant,
+    total_ht:d.total_ht, total_tva:d.total_tva, total_ttc:d.total_ttc,
+    mode_paiement:d.mode_paiement, delai_paiement:d.delai_paiement,
+    conditions:d.conditions, statut:d.statut,
+    lines:(d.devis_lignes||[]).map(l=>({service:l.service,qty:l.qty,price:l.price}))
+  };
+}
+function mapFactureRow(f){
+  return {
+    id:f.id, ref:f.ref, devis_ref:f.devis_ref, client_nom:f.client_nom, client_email:f.client_email,
+    mf:f.mf, tel:f.tel, adr:f.adr, mode:f.mode, remise:f.remise_pct, net:f.net,
+    statut:f.statut, commercial:f.commercial, date:f.date_facture,
+    lines:(f.facture_lignes||[]).map(l=>({service:l.service,qty:l.qty,price:l.price}))
+  };
+}
 
 /* ═══════════════════════════════════════
    NAVIGATION
@@ -1396,21 +1448,24 @@ async function doLogin(){
   btn.classList.add('loading');btn.disabled=true;
   try{
     // Essayer Supabase Auth
-    let role='commercial', name=email.split('@')[0];
+    let role='commercial', name=email.split('@')[0], token=null;
     try{
       const data = await sbAuth(email,pw);
       if(data.access_token){
         const u=data.user;
         role=(u.user_metadata&&u.user_metadata.role)||'commercial';
         name=(u.user_metadata&&u.user_metadata.full_name)||name;
+        token=data.access_token;
       }
     } catch(e){
-      // Fallback démo
+      // Fallback démo (mode hors-ligne / test) — attention : sans token Supabase Auth,
+      // les appels aux tables protégées par RLS "authenticated" échoueront.
       const demo=DEMO_USERS.find(u=>u.email===email&&u.password===pw);
       if(!demo){errEl.textContent="Email ou mot de passe incorrect";errEl.classList.add('show');btn.classList.remove('loading');btn.disabled=false;return;}
       role=demo.role; name=demo.name;
+      showToast('⚠️ Connexion en mode démo (hors Supabase Auth) — données limitées','warn');
     }
-    APP.role=role; APP.name=name; APP.email=email;
+    APP.role=role; APP.name=name; APP.email=email; APP.token=token;
     buildSidebar();
     showPage('pg-app');
     nav(role==='admin'?'dash-admin':'dash-com');
@@ -1442,6 +1497,9 @@ async function loadData(){
   try{ APP.clients = await sbGet('clients'); } catch(e){ APP.clients=[]; }
   try{ APP.fournisseurs = await sbGet('fournisseurs'); } catch(e){ APP.fournisseurs=[]; }
   try{ APP.freelancers = await sbGet('freelancers'); } catch(e){ APP.freelancers=[]; }
+  await reloadDevisCache();
+  await reloadFacturesCache();
+  await reloadComptesCache();
   populateClientSelect();
 }
 
@@ -1619,8 +1677,8 @@ function getContactList(type){
       {id:'c1', nom:'Youssef Khazri',  prenom:'Youssef', nom_famille:'Khazri',  email:'youssef.khazri@draexlmaier.com', telephone:'+216 XX XXX XXX', statut:'actif', role:'Sales Manager'},
       {id:'c2', nom:'Aziz Chelly',     prenom:'Aziz',    nom_famille:'Chelly',   email:'aziz.chelly@esprit.tn',          telephone:'+216 XX XXX XXX', statut:'actif', role:'commercial'},
     ];
-    // Ajouter les comptes créés par admin
-    const saved = JSON.parse(localStorage.getItem('sf_comptes_commerciaux')||'[]');
+    // Ajouter les comptes créés par l'Admin (table Supabase "comptes")
+    const saved = (APP.comptesDb||[]).map(c=>({id:c.id,nom:c.nom,email:c.email,telephone:c.telephone,statut:c.statut,role:c.role}));
     return [...commerciaux, ...saved];
   }
   if(type==='freelancer') return APP.freelancers;
@@ -1841,13 +1899,22 @@ async function saveDv(statut){
   if(!APP.dvLines.some(l=>l.service&&l.price>0)){showToast('Ajoute au moins un service','error');return;}
   const d=buildDvData(statut);
   try{
-    try { await sbInsert('devis',{ref:d.ref,client_nom:d.client_nom,client_email:d.client_email,commercial:d.commercial,statut:d.statut,total_ttc:d.total_ttc}); } catch(e){}
-    // Sauvegarder dans localStorage pour la liste
-    const saved = JSON.parse(localStorage.getItem('sf_devis_list')||'[]');
-    const newDv = {...d, id:Date.now()};
-    saved.unshift(newDv);
-    localStorage.setItem('sf_devis_list', JSON.stringify(saved));
-    localStorage.setItem('sf_last_devis',JSON.stringify(d));
+    const row = {
+      ref:d.ref, date_devis:d.date, validite:parseInt(d.validite)||30,
+      client_nom:d.client_nom, client_email:d.client_email, client_contact:d.client_contact,
+      commercial:d.commercial, objet:d.objet,
+      remise_pct:d.remise_pct, remise_montant:d.remise_mont,
+      total_ht:d.total_ht, total_tva:d.total_tva, total_ttc:d.total_ttc,
+      mode_paiement:d.mode_paiement, delai_paiement:d.delai_paiement,
+      conditions:d.conditions, statut:d.statut
+    };
+    const inserted = await sbInsert('devis',row);
+    const devisRow = Array.isArray(inserted)?inserted[0]:inserted;
+    const lignes = d.lines.filter(l=>l.service).map(l=>({devis_id:devisRow.id,service:l.service,qty:l.qty,price:l.price}));
+    if(lignes.length) await sbInsert('devis_lignes',lignes);
+    await reloadDevisCache();
+    // Garder une référence pour "Charger depuis devis" en Facture / BC
+    localStorage.setItem('sf_last_devis',JSON.stringify({...d,id:devisRow.id}));
     showToast('✅ Devis '+d.ref+' '+(statut==='envoye'?'envoyé':'sauvegardé')+'!','success');
     if(statut==='envoye') setTimeout(()=>previewDv(),800);
   } catch(e){ showToast('Erreur: '+e.message,'error'); }
@@ -2112,32 +2179,42 @@ function setNewRole(r){
   document.getElementById('rs-admin').classList.toggle('on',r==='admin');
 }
 function genPw(){const c='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#';let p='';for(let i=0;i<10;i++)p+=c[Math.floor(Math.random()*c.length)];document.getElementById('nc-pw').value=p;}
-function createAccount(){
+async function createAccount(){
   const name=document.getElementById('nc-name').value.trim();
   const email=document.getElementById('nc-email').value.trim();
   const pw=document.getElementById('nc-pw').value.trim();
+  const tel=document.getElementById('nc-tel').value.trim();
   if(!name||!email||!pw){showToast('Remplis tous les champs obligatoires','error');return;}
   if(pw.length<6){showToast('Mot de passe trop court (min 6 car.)','error');return;}
-  const newCompte = {id:Date.now(),name,email,role:APP.newRole,statut:'actif',pw,created:new Date().toLocaleDateString('fr-FR')};
-  APP.comptes.push(newCompte);
-  // Sauvegarder dans la liste des commerciaux si role=commercial
-  if(APP.newRole==='commercial'){
-    const saved = JSON.parse(localStorage.getItem('sf_comptes_commerciaux')||'[]');
-    saved.push({id:newCompte.id, nom:name, email, telephone:'', statut:'actif', role:'commercial'});
-    localStorage.setItem('sf_comptes_commerciaux', JSON.stringify(saved));
-  }
-  document.getElementById('nc-cred-email').textContent=email;
-  document.getElementById('nc-cred-pw').textContent=pw;
-  document.getElementById('nc-cred-role').textContent=APP.newRole==='admin'?'🛡️ Admin':'💼 Commercial';
-  document.getElementById('nc-cred').style.display='block';
-  document.getElementById('nc-name').value='';document.getElementById('nc-email').value='';document.getElementById('nc-pw').value='';
-  renderComptes();
-  showToast('✅ Compte créé avec succès !','success');
+  if(!APP.token){showToast("Cette action nécessite d'être connecté via Supabase Auth (pas en mode démo)",'error');return;}
+  try{
+    // 1) Créer le vrai compte Supabase Auth via la fonction serverless (clé service_role protégée côté serveur)
+    const resp = await fetch('/api/create-user', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+APP.token},
+      body: JSON.stringify({email,password:pw,full_name:name,role:APP.newRole})
+    });
+    const data = await resp.json();
+    if(!resp.ok) throw new Error(data.error||"Erreur création du compte");
+
+    // 2) Ajouter à l'annuaire Supabase (table comptes) pour affichage partagé
+    await sbInsert('comptes',{nom:name,email,telephone:tel,role:APP.newRole,statut:'actif'});
+    await reloadComptesCache();
+
+    document.getElementById('nc-cred-email').textContent=email;
+    document.getElementById('nc-cred-pw').textContent=pw;
+    document.getElementById('nc-cred-role').textContent=APP.newRole==='admin'?'🛡️ Admin':'💼 Commercial';
+    document.getElementById('nc-cred').style.display='block';
+    document.getElementById('nc-name').value='';document.getElementById('nc-email').value='';document.getElementById('nc-pw').value='';document.getElementById('nc-tel').value='';
+    renderComptes();
+    showToast('✅ Compte créé avec succès !','success');
+  } catch(e){ showToast('Erreur: '+e.message,'error'); }
 }
 function renderComptes(q=''){
-  const f=APP.comptes.filter(c=>!q||c.name.toLowerCase().includes(q)||c.email.toLowerCase().includes(q));
-  document.getElementById('nc-count').textContent=APP.comptes.length;
-  document.getElementById('nc-list').innerHTML=f.length?f.map(c=>`<div style="display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--line)"><div style="width:36px;height:36px;border-radius:9px;background:${c.role==='admin'?'linear-gradient(135deg,#2E86C1,#1E3A5F)':'linear-gradient(135deg,#48C9B0,#1A9E80)'};display:grid;place-items:center;color:#fff;font-weight:800;font-size:14px">${c.name.charAt(0)}</div><div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--brand)">${c.name}</div><div style="font-size:11px;color:var(--muted)">${c.email}</div></div><span class="badge ${c.role}">${c.role==='admin'?'🛡️ Admin':'💼 Commercial'}</span></div>`).join(''):`<div class="empty"><div class="empty-ic">👤</div><b>Aucun compte</b>Créez le premier compte commercial.</div>`;
+  const list = APP.comptesDb||[];
+  const f=list.filter(c=>!q||(c.nom||'').toLowerCase().includes(q.toLowerCase())||(c.email||'').toLowerCase().includes(q.toLowerCase()));
+  document.getElementById('nc-count').textContent=list.length;
+  document.getElementById('nc-list').innerHTML=f.length?f.map(c=>`<div style="display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--line)"><div style="width:36px;height:36px;border-radius:9px;background:${c.role==='admin'?'linear-gradient(135deg,#2E86C1,#1E3A5F)':'linear-gradient(135deg,#48C9B0,#1A9E80)'};display:grid;place-items:center;color:#fff;font-weight:800;font-size:14px">${(c.nom||'?').charAt(0)}</div><div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--brand)">${c.nom}</div><div style="font-size:11px;color:var(--muted)">${c.email}</div></div><span class="badge ${c.role}">${c.role==='admin'?'🛡️ Admin':'💼 Commercial'}</span></div>`).join(''):`<div class="empty"><div class="empty-ic">👤</div><b>Aucun compte</b>Créez le premier compte commercial.</div>`;
 }
 function copyText(id){navigator.clipboard.writeText(document.getElementById(id).textContent).then(()=>showToast('📋 Copié !','success'));}
 
@@ -2261,32 +2338,28 @@ async function analyzeBCWithAI() {
   checks.push({s:bcSign==='oui'?'ok':'warn', t:'Signature / cachet', d:bcSign==='oui'?'Document signé et cacheté':'Non signé — demander une version signée'});
   if(bcSign!=='oui') warnings++;
 
-  // Si image uploadée → analyse IA via API Claude
+  // Si image uploadée → analyse IA via API serverless (clé protégée côté serveur)
   let aiText = '';
   if (BC_IMAGE_B64) {
     try {
       const devisResume = lines.map(l=>`- ${l.service} (x${l.qty}) : ${fmt((l.qty||0)*(l.price||0))} DT HT`).join('\n');
-      const prompt = `Tu es un expert en gestion commerciale. Analyse ce bon de commande (image) et compare-le au devis suivant :\n\nDEVIS ${d.ref} — Client: ${d.client_nom}\nLignes:\n${devisResume}\nTotal HT: ${fmt(dHT)} DT\nTotal TTC: ${fmt(dHT*1.2)} DT\n\nVérifie:\n1. Les services commandés correspondent-ils au devis ?\n2. Les quantités sont-elles identiques ?\n3. Le montant total correspond-il ?\n4. Y a-t-il des anomalies ou points d'attention ?\n\nRéponds en français, de façon concise et structurée.`;
-
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      const resp = await fetch('/api/analyze-bc', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
-          model:'claude-sonnet-4-6',
-          max_tokens:1000,
-          messages:[{
-            role:'user',
-            content:[
-              {type:'image', source:{type:'base64', media_type:'image/jpeg', data:BC_IMAGE_B64}},
-              {type:'text',  text:prompt}
-            ]
-          }]
+          image_b64: BC_IMAGE_B64,
+          devis_ref: d.ref,
+          devis_client: d.client_nom,
+          devis_lignes: devisResume,
+          devis_total_ht: dHT,
+          devis_total_ttc: dHT*1.2
         })
       });
       const data = await resp.json();
-      aiText = data.content?.[0]?.text || '';
+      if (!resp.ok) throw new Error(data.error || 'Erreur analyse IA');
+      aiText = data.text || '';
     } catch(e) {
-      aiText = 'Analyse IA non disponible : '+e.message;
+      aiText = "Analyse IA non disponible : "+e.message+"\n\n(Vérifie que la fonction serverless /api/analyze-bc est bien déployée sur Vercel avec la clé ANTHROPIC_API_KEY configurée.)";
     }
   }
 
@@ -2686,38 +2759,33 @@ function calcEditTotaux() {
   if(ec) ec.textContent = fmt(ttc)+' DT';
 }
 
-function saveEditDevis() {
+async function saveEditDevis() {
   const ht  = editLines.reduce((s,l)=>s+(parseFloat(l.qty)||0)*(parseFloat(l.price)||0),0);
   const tva = ht*0.2;
   const updated = {
-    ref:           document.getElementById('ed-ref').value,
     date_devis:    document.getElementById('ed-date').value,
     client_nom:    document.getElementById('ed-client').value,
     client_email:  document.getElementById('ed-email').value,
     statut:        document.getElementById('ed-statut').value,
-    validite:      document.getElementById('ed-validite').value,
+    validite:      parseInt(document.getElementById('ed-validite').value)||30,
     objet:         document.getElementById('ed-objet').value,
     mode_paiement: document.getElementById('ed-mode').value,
     delai_paiement:document.getElementById('ed-delai').value,
-    lines:         editLines.map(l=>({service:l.service,qty:l.qty,price:l.price})),
     total_ht:      ht,
     total_tva:     tva,
     total_ttc:     ht+tva,
-    commercial:    APP.name,
   };
-
-  // Sauvegarder dans sf_devis_list
-  const saved = JSON.parse(localStorage.getItem('sf_devis_list')||'[]');
-  const idx = saved.findIndex(d=>d.id===EDIT_ID);
-  if (idx>=0) {
-    saved[idx] = {...saved[idx], ...updated};
-  } else {
-    saved.unshift({...updated, id:EDIT_ID});
-  }
-  localStorage.setItem('sf_devis_list', JSON.stringify(saved));
-  closeEditModal();
-  renderDevisList();
-  showToast('✅ Devis mis à jour avec succès !','success');
+  try{
+    await sbUpdate('devis', EDIT_ID, updated);
+    // Remplacer les lignes : on supprime les anciennes puis on réinsère les nouvelles
+    await sbDeleteWhere('devis_lignes','devis_id=eq.'+EDIT_ID);
+    const lignes = editLines.filter(l=>l.service).map(l=>({devis_id:EDIT_ID,service:l.service,qty:l.qty,price:l.price}));
+    if(lignes.length) await sbInsert('devis_lignes',lignes);
+    await reloadDevisCache();
+    closeEditModal();
+    renderDevisList();
+    showToast('✅ Devis mis à jour avec succès !','success');
+  } catch(e){ showToast('Erreur: '+e.message,'error'); }
 }
 
 /* ─── ÉDITER FACTURE ─── */
@@ -2787,7 +2855,7 @@ function editerFacture(id) {
   document.getElementById('edit-overlay').classList.add('show');
 }
 
-function saveEditFacture() {
+async function saveEditFacture() {
   const ht     = editLines.reduce((s,l)=>s+(parseFloat(l.qty)||0)*(parseFloat(l.price)||0),0);
   const remPct = parseFloat(document.getElementById('ef-remise').value)||0;
   const remise = ht*remPct/100;
@@ -2796,50 +2864,36 @@ function saveEditFacture() {
   const net    = htF + tva + 1;
 
   const updated = {
-    ref:        document.getElementById('ef-ref').value,
-    date:       document.getElementById('ef-date').value,
+    date_facture: document.getElementById('ef-date').value,
     client_nom: document.getElementById('ef-client').value,
     mf:         document.getElementById('ef-mf').value,
     tel:        document.getElementById('ef-tel').value,
     adr:        document.getElementById('ef-adr').value,
     statut:     document.getElementById('ef-statut').value,
-    remise:     remPct,
+    remise_pct: remPct,
     mode:       document.getElementById('ef-mode').value,
-    lines:      editLines.map(l=>({service:l.service,qty:l.qty,price:l.price})),
     net,
   };
-
-  const saved = JSON.parse(localStorage.getItem('sf_factures_list')||'[]');
-  const idx = saved.findIndex(f=>f.id===EDIT_ID);
-  if (idx>=0) {
-    saved[idx] = {...saved[idx], ...updated};
-  } else {
-    saved.unshift({...updated, id:EDIT_ID});
-  }
-  localStorage.setItem('sf_factures_list', JSON.stringify(saved));
-  closeEditModal();
-  renderFacturesList();
-  showToast('✅ Facture mise à jour avec succès !','success');
+  try{
+    await sbUpdate('factures', EDIT_ID, updated);
+    await sbDeleteWhere('facture_lignes','facture_id=eq.'+EDIT_ID);
+    const lignes = editLines.filter(l=>l.service).map(l=>({facture_id:EDIT_ID,service:l.service,qty:l.qty,price:l.price}));
+    if(lignes.length) await sbInsert('facture_lignes',lignes);
+    await reloadFacturesCache();
+    closeEditModal();
+    renderFacturesList();
+    showToast('✅ Facture mise à jour avec succès !','success');
+  } catch(e){ showToast('Erreur: '+e.message,'error'); }
 }
 
 /* ═══════════════════════════════════════
    LISTE DES FACTURES
 ═══════════════════════════════════════ */
+// Source de vérité = table Supabase "factures" (+ "facture_lignes"), chargée dans
+// APP.factures au login via reloadFacturesCache(). Partagée entre Admin et Commercial.
 function getAllFactures() {
-  // Factures démo
-  const demo = [
-    {id:1, ref:'FACT-2026-001', client_nom:'DataCore SARL',  client_email:'contact@datacore.tn',  commercial:'Aziz Chelly',   date:'2026-06-02', devis_ref:'DEV-2026-001', net:45601,  statut:'payee',   lines:[{service:'Développement ERP sur mesure',qty:1,price:35000},{service:'Formation DevOps',qty:5,price:600}], mode:'Virement bancaire', mf:'1234567/A', tel:'+216 74 000 000', adr:'Tunis, Tunisie'},
-    {id:2, ref:'FACT-2026-002', client_nom:'FinTech TN',     client_email:'sara@fintechtn.com',   commercial:'Aziz Chelly',   date:'2026-06-06', devis_ref:'DEV-2026-002', net:27121,  statut:'emise',   lines:[{service:'Migration cloud AWS',qty:1,price:8200},{service:'Infogérance mensuelle',qty:12,price:1200}], mode:'Virement bancaire', mf:'', tel:'', adr:''},
-    {id:3, ref:'FACT-2026-003', client_nom:'BTP Conseil',    client_email:'karim@btpconseil.tn',  commercial:'Aziz Chelly',   date:'2026-06-09', devis_ref:'DEV-2026-003', net:28681,  statut:'retard',  lines:[{service:'Développement portail web',qty:1,price:4900},{service:'Conseil & Audit SI',qty:20,price:950}], mode:'Chèque', mf:'', tel:'', adr:''},
-    {id:4, ref:'FACT-2026-004', client_nom:'SudTech SARL',   client_email:'ali@sudtech.tn',       commercial:'Aziz Chelly',   date:'2026-06-11', devis_ref:'DEV-2026-004', net:6901,   statut:'annulee', lines:[{service:'Audit cybersécurité',qty:1,price:3500},{service:'Formation Cybersécurité',qty:5,price:450}], mode:'Virement bancaire', mf:'', tel:'', adr:''},
-    {id:5, ref:'FACT-2026-005', client_nom:'DataCore SARL',  client_email:'contact@datacore.tn',  commercial:'Youssef Khazri',date:'2026-06-16', devis_ref:'DEV-2026-006', net:55801,  statut:'emise',   lines:[{service:'Migration cloud AWS',qty:1,price:8200},{service:'Infogérance mensuelle',qty:24,price:1200},{service:'Conseil & Audit SI',qty:10,price:950}], mode:'Virement bancaire', mf:'1234567/A', tel:'+216 74 000 000', adr:'Tunis'},
-    {id:6, ref:'FACT-2026-006', client_nom:'MediaPlus',      client_email:'rym@mediaplus.tn',     commercial:'Youssef Khazri',date:'2026-06-20', devis_ref:'DEV-2026-005', net:9721,  statut:'payee',   lines:[{service:'Développement mobile',qty:1,price:6500},{service:'Maintenance corrective',qty:2,price:800}], mode:'Virement bancaire', mf:'', tel:'', adr:''},
-  ];
-
-  // Fusionner avec factures sauvegardées
-  const saved = JSON.parse(localStorage.getItem('sf_factures_list') || '[]');
-  const refs = new Set(saved.map(f=>f.ref));
-  return [...demo.filter(f=>!refs.has(f.ref)), ...saved].sort((a,b)=>b.id-a.id);
+  if (!APP.factures) return [];
+  return APP.factures.map(mapFactureRow).sort((a,b)=>b.id-a.id);
 }
 
 function renderFacturesList() {
@@ -3076,7 +3130,7 @@ function imprimerFacture(id) {
         <div style="display:flex;justify-content:space-between;padding:5px 8px;border-bottom:1px solid #e4ebf2"><span style="color:#888">Total HT</span><span style="font-weight:700">${fn3(htF)} DT</span></div>
         <div style="display:flex;justify-content:space-between;padding:5px 8px;border-bottom:1px solid #e4ebf2"><span style="color:#888">Total TVA (20%)</span><span style="font-weight:700">${fn3(tva)} DT</span></div>
         <div style="display:flex;justify-content:space-between;padding:5px 8px;border-bottom:1px solid #e4ebf2"><span style="color:#888">Timbre fiscal</span><span style="font-weight:700">1,000 DT</span></div>
-        <div style="display:flex;justify-content:space-between;padding:5px 8px;border-bottom:1px solid #e4ebf2"><span style="color:#888">FODEC</span><span style="font-weight:700">0,000 DT</span></div>
+        <div style="display:flex;justify-content:space-between;padding:5px 8px"><span style="color:#888">FODEC</span><span style="font-weight:700">0,000 DT</span></div>
       </div>
       <!-- Net à payer -->
       <div style="background:#1E3A5F;border-radius:4px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;margin-top:6px">
@@ -3118,53 +3172,49 @@ function emailFacture(id) {
   showToast('📧 Email ouvert pour '+f.client_nom,'success');
 }
 
-function marquerPayee(id) {
-  const saved = JSON.parse(localStorage.getItem('sf_factures_list') || '[]');
-  const existing = saved.find(f=>f.id===id);
-  if (existing) {
-    existing.statut = 'payee';
-  } else {
-    // Copier depuis démo et marquer payée
-    const all = getAllFactures();
-    const f = all.find(x=>x.id===id);
-    if (f) { f.statut='payee'; saved.push(f); }
-  }
-  localStorage.setItem('sf_factures_list', JSON.stringify(saved));
-  renderFacturesList();
-  showToast('✅ Facture marquée comme payée !','success');
+async function marquerPayee(id) {
+  try{
+    await sbUpdate('factures', id, {statut:'payee'});
+    await reloadFacturesCache();
+    renderFacturesList();
+    showToast('✅ Facture marquée comme payée !','success');
+  } catch(e){ showToast('Erreur: '+e.message,'error'); }
 }
 
-function deleteFacture(id) {
+async function deleteFacture(id) {
   if (!confirm('Supprimer cette facture ?')) return;
-  const saved = JSON.parse(localStorage.getItem('sf_factures_list') || '[]');
-  localStorage.setItem('sf_factures_list', JSON.stringify(saved.filter(f=>f.id!==id)));
-  renderFacturesList();
-  showToast('🗑️ Facture supprimée','warn');
+  try{
+    await sbDelete('factures',id);
+    await reloadFacturesCache();
+    renderFacturesList();
+    showToast('🗑️ Facture supprimée','warn');
+  } catch(e){ showToast('Erreur: '+e.message,'error'); }
 }
 
-// Sauvegarder facture depuis la section facture
-function saveFactureToList(statut='emise') {
-  const f = {
-    id: Date.now(),
+// Sauvegarder facture depuis la section facture (Supabase)
+async function saveFactureToList(statut='emise') {
+  const row = {
     ref: document.getElementById('fc-ref').value,
     client_nom: document.getElementById('fc-client').value,
     mf: document.getElementById('fc-mf').value,
     tel: document.getElementById('fc-tel').value,
     adr: document.getElementById('fc-adr').value,
     mode: document.getElementById('fc-mode').value,
-    remise: parseFloat(document.getElementById('fc-rem').value)||0,
-    lines: [...factLines],
+    remise_pct: parseFloat(document.getElementById('fc-rem').value)||0,
     net: parseFloat(document.getElementById('f-net').textContent)||0,
     commercial: APP.name,
-    date: new Date().toISOString().split('T')[0],
-    statut,
-    client_email: ''
+    date_facture: new Date().toISOString().split('T')[0],
+    statut
   };
-  const saved = JSON.parse(localStorage.getItem('sf_factures_list') || '[]');
-  saved.unshift(f);
-  localStorage.setItem('sf_factures_list', JSON.stringify(saved));
-  showToast('✅ Facture '+f.ref+' sauvegardée !','success');
-  setTimeout(()=>nav('factures-list'), 800);
+  try{
+    const inserted = await sbInsert('factures',row);
+    const factRow = Array.isArray(inserted)?inserted[0]:inserted;
+    const lignes = factLines.filter(l=>l.service).map(l=>({facture_id:factRow.id,service:l.service,qty:l.qty,price:l.price}));
+    if(lignes.length) await sbInsert('facture_lignes',lignes);
+    await reloadFacturesCache();
+    showToast('✅ Facture '+row.ref+' sauvegardée !','success');
+    setTimeout(()=>nav('factures-list'), 800);
+  } catch(e){ showToast('Erreur: '+e.message,'error'); }
 }
 
 /* ═══════════════════════════════════════
@@ -3181,8 +3231,7 @@ function getBrouillonDevis() {
 
 function getBrouillonFactures() {
   const isAdmin = APP.role === 'admin';
-  const saved = JSON.parse(localStorage.getItem('sf_factures_brouillon') || '[]');
-  return saved.filter(f => isAdmin || f.commercial === APP.name);
+  return getAllFactures().filter(f => f.statut==='brouillon' && (isAdmin || f.commercial === APP.name));
 }
 
 function renderBrouillons() {
@@ -3300,26 +3349,27 @@ function loadDevisForEdit(d) {
 
 function modifierFacture(id) {
   nav('facture');
-  const saved = JSON.parse(localStorage.getItem('sf_factures_brouillon') || '[]');
-  const f = saved.find(x => x.id === id);
+  const f = getAllFactures().find(x => x.id === id);
   if (!f) return;
   document.getElementById('fc-client').value = f.client_nom || '';
   document.getElementById('fc-mf').value = f.mf || '';
   document.getElementById('fc-tel').value = f.tel || '';
   document.getElementById('fc-adr').value = f.adr || '';
   document.getElementById('fc-mode').value = f.mode || 'Virement bancaire';
-  document.getElementById('fc-rem').value = f.rem || 0;
+  document.getElementById('fc-rem').value = f.remise || 0;
   factLines = f.lines || [];
   updateFacture();
   showToast('✏️ Facture chargée pour modification', 'info');
 }
 
-function deleteFactBrouillon(id) {
+async function deleteFactBrouillon(id) {
   if (!confirm('Supprimer cette facture brouillon ?')) return;
-  const saved = JSON.parse(localStorage.getItem('sf_factures_brouillon') || '[]');
-  localStorage.setItem('sf_factures_brouillon', JSON.stringify(saved.filter(f => f.id !== id)));
-  renderBrouillons();
-  showToast('🗑️ Facture supprimée', 'warn');
+  try{
+    await sbDelete('factures',id);
+    await reloadFacturesCache();
+    renderBrouillons();
+    showToast('🗑️ Facture supprimée', 'warn');
+  } catch(e){ showToast('Erreur: '+e.message,'error'); }
 }
 
 function imprimerFactBrouillon(id) {
@@ -3327,26 +3377,9 @@ function imprimerFactBrouillon(id) {
   setTimeout(() => imprimerFact(), 500);
 }
 
-// Sauvegarder facture en brouillon depuis la section facture
-function saveFactureBrouillon() {
-  const f = {
-    id: Date.now(),
-    ref: document.getElementById('fc-ref').value,
-    client_nom: document.getElementById('fc-client').value,
-    mf: document.getElementById('fc-mf').value,
-    tel: document.getElementById('fc-tel').value,
-    adr: document.getElementById('fc-adr').value,
-    mode: document.getElementById('fc-mode').value,
-    rem: document.getElementById('fc-rem').value,
-    lines: [...factLines],
-    net: parseFloat(document.getElementById('f-net').textContent) || 0,
-    commercial: APP.name,
-    date: new Date().toLocaleDateString('fr-FR'),
-    statut: 'brouillon'
-  };
-  const saved = JSON.parse(localStorage.getItem('sf_factures_brouillon') || '[]');
-  saved.unshift(f);
-  localStorage.setItem('sf_factures_brouillon', JSON.stringify(saved));
+// Sauvegarder facture en brouillon (même table Supabase, statut='brouillon')
+async function saveFactureBrouillon() {
+  await saveFactureToList('brouillon');
   showToast('💾 Facture sauvegardée en brouillon !', 'success');
 }
 
@@ -3354,39 +3387,28 @@ function saveFactureBrouillon() {
    OBJECTIF ANNUEL ADMIN
 ═══════════════════════════════════════ */
 function calcCADepuis2026() {
-  // Calculer le CA depuis le 1er janvier 2026
-  // depuis les devis acceptés + factures
+  // Calculer le CA depuis le 1er janvier 2026, à partir des devis acceptés
+  // stockés dans Supabase (APP.devis, partagé entre tous les utilisateurs)
   const devisList = getAllDevis();
   const debut = new Date('2026-01-01');
-  
   let ca = 0;
   devisList.forEach(d => {
     if (d.statut === 'accepté') {
       const dateD = new Date(d.date_devis);
-      if (dateD >= debut) {
-        ca += parseFloat(d.total_ttc) || 0;
-      }
+      if (dateD >= debut) ca += parseFloat(d.total_ttc) || 0;
     }
   });
-
-  // Aussi depuis les devis sauvegardés dans sf_devis_list
-  const savedDevis = JSON.parse(localStorage.getItem('sf_devis_list') || '[]');
-  savedDevis.forEach(d => {
-    if (d.statut === 'envoye' || d.statut === 'accepté') {
-      const dateD = new Date(d.date_devis || d.date);
-      if (dateD >= debut) {
-        ca += parseFloat(d.total_ttc) || 0;
-      }
-    }
-  });
-
   return Math.round(ca);
 }
 
-function loadObjectif() {
-  const saved = JSON.parse(localStorage.getItem('sf_objectif') || 'null');
-  const obj = saved || { annee: 2026, realise: 0, cible: 1200000, vs: '+8%' };
-  
+async function loadObjectif() {
+  let obj = { annee: 2026, realise: 0, cible: 1200000, vs: '+8%' };
+  try{
+    const rows = await sbGet('objectifs','annee=eq.2026');
+    if(rows && rows[0]) obj = {annee:rows[0].annee, realise:0, cible:rows[0].cible, vs:rows[0].vs};
+  } catch(e){ /* table pas encore migrée ou vide -> valeurs par défaut */ }
+  APP.objectif = obj;
+
   // Calculer le CA réel depuis le 1er janvier 2026
   const caReel = calcCADepuis2026();
   obj.realise = caReel;
@@ -3407,8 +3429,7 @@ function loadObjectif() {
 }
 
 function openObjModal() {
-  const saved = JSON.parse(localStorage.getItem('sf_objectif') || 'null');
-  const obj = saved || { annee: 2026, realise: 0, cible: 1200000, vs: '+8%' };
+  const obj = APP.objectif || { annee: 2026, realise: 0, cible: 1200000, vs: '+8%' };
   const caReel = calcCADepuis2026();
   document.getElementById('obj-f-annee').value = obj.annee;
   document.getElementById('obj-f-realise').value = caReel; // CA calculé automatiquement
@@ -3429,16 +3450,20 @@ function updateObjPreview() {
   document.getElementById('obj-preview-pct').textContent = pct + '%';
 }
 
-function saveObjectif() {
+async function saveObjectif() {
   const obj = {
     annee:   parseInt(document.getElementById('obj-f-annee').value) || 2026,
     cible:   parseFloat(document.getElementById('obj-f-cible').value) || 1,
     vs:      document.getElementById('obj-f-vs').value || '+0%',
   };
-  localStorage.setItem('sf_objectif', JSON.stringify(obj));
-  document.getElementById('obj-modal').classList.remove('show');
-  loadObjectif();
-  showToast('✅ Objectif mis à jour !', 'success');
+  try{
+    const rows = await sbGet('objectifs','annee=eq.'+obj.annee);
+    if(rows && rows[0]) await sbUpdate('objectifs', rows[0].id, {cible:obj.cible, vs:obj.vs});
+    else await sbInsert('objectifs', obj);
+    document.getElementById('obj-modal').classList.remove('show');
+    await loadObjectif();
+    showToast('✅ Objectif mis à jour !', 'success');
+  } catch(e){ showToast('Erreur: '+e.message,'error'); }
 }
 
 /* ═══════════════════════════════════════
@@ -3447,22 +3472,11 @@ function saveObjectif() {
 let DEVIS_LIST = [];
 let CURRENT_CONSULT = null;
 
-// Données démo + données sauvegardées dans localStorage
+// Source de vérité = table Supabase "devis" (+ "devis_lignes"), chargée dans APP.devis
+// au login via reloadDevisCache(). Partagée entre Admin et Commercial en temps réel.
 function getAllDevis() {
-  const saved = JSON.parse(localStorage.getItem('sf_devis_list') || '[]');
-  const demo = [
-    {id:1, ref:'DEV-2026-001', client_nom:'DataCore SARL',    client_email:'contact@datacore.tn',    client_contact:'Mohamed Ben Ali', commercial:'Aziz Chelly',   date_devis:'2026-06-01', validite:30, statut:'accepté',  total_ttc:45600,  objet:'Développement ERP sur mesure',    lines:[{service:'Développement ERP sur mesure',qty:1,price:35000},{service:'Formation DevOps',qty:5,price:600}], mode_paiement:'Virement bancaire', delai_paiement:'30 jours', conditions:'Livraison en 3 phases'},
-    {id:2, ref:'DEV-2026-002', client_nom:'FinTech TN',       client_email:'sara@fintechtn.com',      client_contact:'Sara Jebali',     commercial:'Aziz Chelly',   date_devis:'2026-06-05', validite:30, statut:'envoye',   total_ttc:27120,  objet:'Migration cloud AWS',             lines:[{service:'Migration cloud AWS',qty:1,price:8200},{service:'Infogérance mensuelle',qty:12,price:1200}], mode_paiement:'Virement bancaire', delai_paiement:'30 jours', conditions:''},
-    {id:3, ref:'DEV-2026-003', client_nom:'BTP Conseil',      client_email:'karim@btpconseil.tn',     client_contact:'Karim Mrad',      commercial:'Aziz Chelly',   date_devis:'2026-06-08', validite:30, statut:'envoye',   total_ttc:28680,  objet:'Portail web RH',                  lines:[{service:'Développement portail web',qty:1,price:4900},{service:'Conseil & Audit SI',qty:20,price:950}], mode_paiement:'Chèque', delai_paiement:'15 jours', conditions:''},
-    {id:4, ref:'DEV-2026-004', client_nom:'SudTech SARL',     client_email:'ali@sudtech.tn',          client_contact:'Ali Khelil',      commercial:'Aziz Chelly',   date_devis:'2026-06-10', validite:15, statut:'expiré',   total_ttc:6900,   objet:'Audit cybersécurité',             lines:[{service:'Audit cybersécurité',qty:1,price:3500},{service:'Formation Cybersécurité',qty:5,price:450}], mode_paiement:'Virement bancaire', delai_paiement:'30 jours', conditions:''},
-    {id:5, ref:'DEV-2026-005', client_nom:'MediaPlus',        client_email:'rym@mediaplus.tn',        client_contact:'Rym Gafsi',       commercial:'Youssef Khazri', date_devis:'2026-06-12', validite:30, statut:'refusé',   total_ttc:9720,   objet:'Développement mobile',            lines:[{service:'Développement mobile',qty:1,price:6500},{service:'Maintenance corrective',qty:2,price:800}], mode_paiement:'Virement bancaire', delai_paiement:'30 jours', conditions:''},
-    {id:6, ref:'DEV-2026-006', client_nom:'DataCore SARL',    client_email:'contact@datacore.tn',     client_contact:'Mohamed Ben Ali', commercial:'Youssef Khazri', date_devis:'2026-06-15', validite:30, statut:'accepté',  total_ttc:55800,  objet:'Infrastructure Cloud complète',   lines:[{service:'Migration cloud AWS',qty:1,price:8200},{service:'Infogérance mensuelle',qty:24,price:1200},{service:'Conseil & Audit SI',qty:10,price:950}], mode_paiement:'Virement bancaire', delai_paiement:'60 jours', conditions:'Contrat cadre 2 ans'},
-    {id:7, ref:'DEV-2026-007', client_nom:'FinTech TN',       client_email:'sara@fintechtn.com',      client_contact:'Sara Jebali',     commercial:'Aziz Chelly',   date_devis:'2026-06-18', validite:30, statut:'brouillon', total_ttc:5880,  objet:'Formation équipe DevOps',         lines:[{service:'Formation DevOps',qty:5,price:600},{service:'Conseil & Audit SI',qty:2,price:950}], mode_paiement:'Virement bancaire', delai_paiement:'30 jours', conditions:''},
-    {id:8, ref:'DEV-2026-008', client_nom:'BTP Conseil',      client_email:'karim@btpconseil.tn',     client_contact:'Karim Mrad',      commercial:'Aziz Chelly',   date_devis:'2026-06-20', validite:30, statut:'envoye',   total_ttc:29520,  objet:'ERP Gestion de chantiers',        lines:[{service:'Développement ERP sur mesure',qty:1,price:18000},{service:'Formation DevOps',qty:3,price:600},{service:'Maintenance corrective',qty:6,price:800}], mode_paiement:'Chèque', delai_paiement:'45 jours', conditions:''},
-  ];
-  // Fusionner démo + sauvegardés (éviter doublons par ref)
-  const refs = new Set(saved.map(d=>d.ref));
-  return [...demo.filter(d=>!refs.has(d.ref)), ...saved].sort((a,b)=>b.id-a.id);
+  if (!APP.devis) return []; // pas encore chargé
+  return APP.devis.map(mapDevisRow).sort((a,b)=>b.id-a.id);
 }
 
 function renderDevisList() {
@@ -3669,13 +3683,14 @@ function devisToFacture(id) {
   }, 200);
 }
 
-function deleteDevis(id) {
+async function deleteDevis(id) {
   if(!confirm('Supprimer ce devis ?')) return;
-  const saved = JSON.parse(localStorage.getItem('sf_devis_list')||'[]');
-  const updated = saved.filter(d=>d.id!==id);
-  localStorage.setItem('sf_devis_list', JSON.stringify(updated));
-  renderDevisList();
-  showToast('🗑️ Devis supprimé','warn');
+  try{
+    await sbDelete('devis',id); // ON DELETE CASCADE supprime aussi les devis_lignes
+    await reloadDevisCache();
+    renderDevisList();
+    showToast('🗑️ Devis supprimé','warn');
+  } catch(e){ showToast('Erreur: '+e.message,'error'); }
 }
 
 function enLettres(n){
