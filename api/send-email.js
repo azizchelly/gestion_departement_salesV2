@@ -1,8 +1,5 @@
 // api/send-email.js
-// Fonction serverless Vercel — envoie un email via Mailjet API
-// Variables d'environnement requises :
-//   MAILJET_API_KEY    = bb7855dd...
-//   MAILJET_SECRET_KEY = 2a0774a4...
+// Fonction serverless Vercel — envoie un email via Mailjet API v3.1
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -19,23 +16,24 @@ export default async function handler(req, res) {
   try {
     const { to, subject, html, from_name } = req.body || {};
     if (!to || !subject || !html) {
-      return res.status(400).json({ error: "Champs 'to', 'subject' et 'html' requis" });
+      return res.status(400).json({ error: "Champs requis manquants" });
     }
 
-    // Mailjet envoie à n'importe quelle adresse sans domaine vérifié
-    const credentials = Buffer.from(apiKey + ':' + secretKey).toString('base64');
+    // Debug : log les 4 premiers caractères des clés pour vérifier
+    console.log('API Key prefix:', apiKey.substring(0, 4));
+    console.log('Secret Key prefix:', secretKey.substring(0, 4));
 
     const resp = await fetch('https://api.mailjet.com/v3.1/send', {
       method: 'POST',
       headers: {
-        'Authorization': 'Basic ' + credentials,
+        'Authorization': 'Basic ' + Buffer.from(`${apiKey}:${secretKey}`).toString('base64'),
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         Messages: [{
           From: {
             Email: 'aziz.chelly@esprit.tn',
-            Name:  from_name || 'SalesFlow Pro'
+            Name: from_name || 'SalesFlow Pro'
           },
           To: [{ Email: to }],
           Subject: subject,
@@ -44,14 +42,22 @@ export default async function handler(req, res) {
       }),
     });
 
-    const data = await resp.json();
-    if (!resp.ok || data.Messages?.[0]?.Status === 'error') {
-      const errMsg = data.Messages?.[0]?.Errors?.[0]?.ErrorMessage || data.ErrorMessage || 'Erreur Mailjet';
-      return res.status(400).json({ error: errMsg });
+    const text = await resp.text();
+    console.log('Mailjet response status:', resp.status);
+    console.log('Mailjet response body:', text);
+
+    let data;
+    try { data = JSON.parse(text); } catch(e) { data = { raw: text }; }
+
+    if (!resp.ok) {
+      return res.status(resp.status).json({ 
+        error: data?.ErrorMessage || data?.Messages?.[0]?.Errors?.[0]?.ErrorMessage || text 
+      });
     }
 
     return res.status(200).json({ success: true });
   } catch (err) {
+    console.error('Send email error:', err);
     return res.status(500).json({ error: err.message || 'Erreur serveur' });
   }
 }
