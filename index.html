@@ -2901,7 +2901,7 @@ function renderFacturesList() {
   let list = getAllFactures().filter(f => {
     const matchQ = !q || f.ref.toLowerCase().includes(q) || f.client_nom.toLowerCase().includes(q) || (f.commercial||'').toLowerCase().includes(q);
     const matchS = !filterStatut || f.statut === filterStatut;
-    const matchC = isAdmin || f.commercial === APP.name;
+    const matchC = true; // tout le monde (Admin + Commercial) voit toutes les factures
     return matchQ && matchS && matchC;
   });
 
@@ -3244,17 +3244,11 @@ async function saveFactureToList(statut='emise') {
    BROUILLONS
 ═══════════════════════════════════════ */
 function getBrouillonDevis() {
-  const isAdmin = APP.role === 'admin';
-  return getAllDevis().filter(d => {
-    const match = d.statut === 'brouillon';
-    const matchC = isAdmin || d.commercial === APP.name;
-    return match && matchC;
-  });
+  return getAllDevis().filter(d => d.statut === 'brouillon');
 }
 
 function getBrouillonFactures() {
-  const isAdmin = APP.role === 'admin';
-  return getAllFactures().filter(f => f.statut==='brouillon' && (isAdmin || f.commercial === APP.name));
+  return getAllFactures().filter(f => f.statut === 'brouillon');
 }
 
 function renderBrouillons() {
@@ -3511,8 +3505,8 @@ function renderDevisList() {
   let filtered = DEVIS_LIST.filter(d => {
     const matchQ = !q || d.ref.toLowerCase().includes(q) || d.client_nom.toLowerCase().includes(q) || (d.commercial||'').toLowerCase().includes(q);
     const matchS = !filterStatut || d.statut === filterStatut;
-    // Commercial voit seulement ses devis
-    const matchC = isAdmin || d.commercial === APP.name;
+    // Tout le monde (Admin + Commercial) voit tous les devis
+    const matchC = true;
     return matchQ && matchS && matchC;
   });
 
