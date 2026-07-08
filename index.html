@@ -3157,7 +3157,12 @@ function imprimerFacture(id) {
 async function emailFacture(id) {
   const f = getAllFactures().find(x=>x.id===id);
   if (!f) { showToast("Facture introuvable",'error'); return; }
-  if (!f.client_email) { showToast("Email client non renseigné — modifie la facture pour ajouter l'email",'error'); return; }
+
+  // Demander l'adresse email à l'utilisateur
+  const defaultEmail = f.client_email || '';
+  const toEmail = prompt(`📧 Envoyer la facture ${f.ref} à quel email ?`, defaultEmail);
+  if (!toEmail || !toEmail.trim()) return; // annulé
+  if (!toEmail.includes('@')) { showToast("Adresse email invalide",'error'); return; }
 
   const lines = (f.lines||[]).filter(l=>l.service);
   const ht = lines.reduce((s,l)=>s+(parseFloat(l.qty)||0)*(parseFloat(l.price)||0),0);
@@ -3219,14 +3224,15 @@ async function emailFacture(id) {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
-        to: f.client_email,
+        to: toEmail.trim(),
         subject: 'Facture ' + f.ref + ' — SalesFlow Pro',
-        html
+        html,
+        from_name: APP.name + ' — SalesFlow Pro'
       })
     });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'Erreur envoi');
-    showToast('✅ Facture envoyée par email à ' + f.client_email, 'success');
+    showToast('✅ Facture envoyée par email à ' + toEmail.trim(), 'success');
   } catch(e) {
     showToast('❌ Erreur envoi email : ' + e.message, 'error');
   }
@@ -3707,7 +3713,12 @@ function imprimerConsult() {
 async function emailDevis(id) {
   const d = DEVIS_LIST.find(x=>x.id===id) || getAllDevis().find(x=>x.id===id);
   if(!d) return;
-  if(!d.client_email){ showToast("Email client non renseigné",'error'); return; }
+
+  // Demander l'adresse email à l'utilisateur
+  const defaultEmail = d.client_email || '';
+  const toEmail = prompt(`📧 Envoyer le devis ${d.ref} à quel email ?`, defaultEmail);
+  if (!toEmail || !toEmail.trim()) return;
+  if (!toEmail.includes('@')) { showToast("Adresse email invalide",'error'); return; }
 
   const lines = (d.lines||[]).filter(l=>l.service);
   const ht = lines.reduce((s,l)=>s+(parseFloat(l.qty)||0)*(parseFloat(l.price)||0),0);
@@ -3767,14 +3778,15 @@ async function emailDevis(id) {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
-        to: d.client_email,
+        to: toEmail.trim(),
         subject: 'Devis ' + d.ref + ' — SalesFlow Pro',
-        html
+        html,
+        from_name: APP.name + ' — SalesFlow Pro'
       })
     });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'Erreur envoi');
-    showToast('✅ Devis envoyé par email à ' + d.client_email, 'success');
+    showToast('✅ Devis envoyé par email à ' + toEmail.trim(), 'success');
   } catch(e) {
     showToast('❌ Erreur envoi email : ' + e.message, 'error');
   }
