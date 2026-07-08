@@ -3154,19 +3154,82 @@ function imprimerFacture(id) {
   win.document.close();
 }
 
-function emailFacture(id) {
+async function emailFacture(id) {
   const f = getAllFactures().find(x=>x.id===id);
-  if (!f || !f.client_email) { showToast("Email client non renseigné",'error'); return; }
-  const sujet = encodeURIComponent('Facture '+f.ref+' — SalesFlow Pro');
-  const corps = encodeURIComponent(
-    'Bonjour,\n\nVeuillez trouver ci-joint la facture '+f.ref+'.\n\n'+
-    'Client : '+f.client_nom+'\n'+
-    'Montant net à payer : '+fmt(f.net)+' DT\n'+
-    'Mode de paiement : '+(f.mode||'Virement bancaire')+'\n\n'+
-    'Cordialement,\n'+(f.commercial||APP.name)+'\nSalesFlow Pro'
-  );
-  window.open('mailto:'+encodeURIComponent(f.client_email)+'?subject='+sujet+'&body='+corps);
-  showToast('📧 Email ouvert pour '+f.client_nom,'success');
+  if (!f) { showToast("Facture introuvable",'error'); return; }
+  if (!f.client_email) { showToast("Email client non renseigné — modifie la facture pour ajouter l'email",'error'); return; }
+
+  const lines = (f.lines||[]).filter(l=>l.service);
+  const ht = lines.reduce((s,l)=>s+(parseFloat(l.qty)||0)*(parseFloat(l.price)||0),0);
+  const remPct = parseFloat(f.remise)||0;
+  const remise = ht*remPct/100, htF = ht-remise, tva = htF*0.2, net = htF+tva+1;
+
+  const lignesHtml = lines.map(l=>`
+    <tr style="border-bottom:1px solid #eee">
+      <td style="padding:8px">${l.service}</td>
+      <td style="padding:8px;text-align:center">${l.qty}</td>
+      <td style="padding:8px;text-align:right">${fmt(l.price)} DT</td>
+      <td style="padding:8px;text-align:right;font-weight:700">${fmt((parseFloat(l.qty)||0)*(parseFloat(l.price)||0))} DT</td>
+    </tr>`).join('');
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#111">
+      <div style="background:#1E3A5F;padding:20px;border-radius:8px 8px 0 0">
+        <h1 style="color:#fff;margin:0;font-size:22px">SalesFlow <span style="color:#48C9B0">Pro</span></h1>
+        <p style="color:rgba(255,255,255,.6);margin:5px 0 0;font-size:13px">Services Informatiques · Tunis</p>
+      </div>
+      <div style="background:#f4f7fb;padding:20px;border-radius:0 0 8px 8px">
+        <p style="font-size:15px">Bonjour,</p>
+        <p>Veuillez trouver ci-dessous le détail de votre facture <strong>${f.ref}</strong>.</p>
+
+        <div style="background:#fff;border-radius:8px;padding:16px;margin:16px 0">
+          <table style="width:100%;border-collapse:collapse">
+            <thead>
+              <tr style="background:#1E3A5F;color:#fff">
+                <th style="padding:8px;text-align:left">Service</th>
+                <th style="padding:8px;text-align:center">Qté</th>
+                <th style="padding:8px;text-align:right">P.U. HT</th>
+                <th style="padding:8px;text-align:right">Total HT</th>
+              </tr>
+            </thead>
+            <tbody>${lignesHtml}</tbody>
+          </table>
+        </div>
+
+        <div style="background:#fff;border-radius:8px;padding:16px;margin:16px 0">
+          ${remPct>0?`<div style="display:flex;justify-content:space-between;padding:4px 0;color:#D97706"><span>Remise (${remPct}%)</span><span>-${fmt(remise)} DT</span></div>`:''}
+          <div style="display:flex;justify-content:space-between;padding:4px 0"><span style="color:#666">Total HT</span><span>${fmt(htF)} DT</span></div>
+          <div style="display:flex;justify-content:space-between;padding:4px 0"><span style="color:#666">TVA (20%)</span><span>${fmt(tva)} DT</span></div>
+          <div style="display:flex;justify-content:space-between;padding:4px 0"><span style="color:#666">Timbre fiscal</span><span>1 DT</span></div>
+          <div style="display:flex;justify-content:space-between;padding:10px;margin-top:8px;background:#1E3A5F;border-radius:6px">
+            <span style="color:#fff;font-weight:700">NET À PAYER</span>
+            <span style="color:#48C9B0;font-weight:900;font-size:18px">${fmt(net)} DT</span>
+          </div>
+        </div>
+
+        <p style="color:#666;font-size:13px">Mode de paiement : <strong>${f.mode||'Virement bancaire'}</strong></p>
+        <hr style="border:none;border-top:1px solid #ddd;margin:20px 0">
+        <p style="color:#888;font-size:12px">Cordialement,<br><strong>${f.commercial||APP.name}</strong><br>SalesFlow Pro · contact@salesflowpro.tn</p>
+      </div>
+    </div>`;
+
+  showToast('📧 Envoi en cours…','info');
+  try {
+    const resp = await fetch('/api/send-email', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        to: f.client_email,
+        subject: 'Facture ' + f.ref + ' — SalesFlow Pro',
+        html
+      })
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Erreur envoi');
+    showToast('✅ Facture envoyée par email à ' + f.client_email, 'success');
+  } catch(e) {
+    showToast('❌ Erreur envoi email : ' + e.message, 'error');
+  }
 }
 
 async function marquerPayee(id) {
@@ -3641,18 +3704,80 @@ function imprimerConsult() {
   win.document.close();
 }
 
-function emailDevis(id) {
-  const d = DEVIS_LIST.find(x=>x.id===id);
+async function emailDevis(id) {
+  const d = DEVIS_LIST.find(x=>x.id===id) || getAllDevis().find(x=>x.id===id);
   if(!d) return;
-  if(!d.client_email){showToast("Email client non renseigné",'error');return;}
+  if(!d.client_email){ showToast("Email client non renseigné",'error'); return; }
+
   const lines = (d.lines||[]).filter(l=>l.service);
   const ht = lines.reduce((s,l)=>s+(parseFloat(l.qty)||0)*(parseFloat(l.price)||0),0);
-  const tva=ht*0.2, ttc=ht+tva;
-  const lignes = lines.map(l=>'  • '+l.service+' (x'+l.qty+') : '+fmt((l.qty||0)*(l.price||0))+' DT HT').join('\n');
-  const sujet = encodeURIComponent('Devis '+d.ref+' — SalesFlow Pro');
-  const corps = encodeURIComponent('Bonjour '+d.client_contact+',\n\nVeuillez trouver ci-dessous le devis '+d.ref+'.\n\nServices :\n'+lignes+'\n\nTotal HT : '+fmt(ht)+' DT\nTVA (20%) : '+fmt(tva)+' DT\nTOTAL TTC : '+fmt(ttc)+' DT\n\nMode de paiement : '+(d.mode_paiement||'—')+' — '+(d.delai_paiement||'—')+'\n\nCordialement,\n'+(d.commercial||APP.name)+'\nSalesFlow Pro');
-  window.open('mailto:'+encodeURIComponent(d.client_email)+'?subject='+sujet+'&body='+corps);
-  showToast('📧 Email ouvert pour '+d.client_nom,'success');
+  const tva = ht*0.2, ttc = ht+tva;
+
+  const lignesHtml = lines.map(l=>`
+    <tr style="border-bottom:1px solid #eee">
+      <td style="padding:8px">${l.service}</td>
+      <td style="padding:8px;text-align:center">${l.qty}</td>
+      <td style="padding:8px;text-align:right">${fmt(l.price)} DT</td>
+      <td style="padding:8px;text-align:right;font-weight:700">${fmt((parseFloat(l.qty)||0)*(parseFloat(l.price)||0))} DT</td>
+    </tr>`).join('');
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#111">
+      <div style="background:#1E3A5F;padding:20px;border-radius:8px 8px 0 0">
+        <h1 style="color:#fff;margin:0;font-size:22px">SalesFlow <span style="color:#48C9B0">Pro</span></h1>
+        <p style="color:rgba(255,255,255,.6);margin:5px 0 0;font-size:13px">Services Informatiques · Tunis</p>
+      </div>
+      <div style="background:#f4f7fb;padding:20px;border-radius:0 0 8px 8px">
+        <p style="font-size:15px">Bonjour ${d.client_contact||''},</p>
+        <p>Veuillez trouver ci-dessous le devis <strong>${d.ref}</strong> valable ${d.validite||30} jours.</p>
+        ${d.objet?`<p style="background:#EBF4FF;border-left:3px solid #2E86C1;padding:10px;border-radius:4px"><strong>Objet :</strong> ${d.objet}</p>`:''}
+
+        <div style="background:#fff;border-radius:8px;padding:16px;margin:16px 0">
+          <table style="width:100%;border-collapse:collapse">
+            <thead>
+              <tr style="background:#1E3A5F;color:#fff">
+                <th style="padding:8px;text-align:left">Service</th>
+                <th style="padding:8px;text-align:center">Qté</th>
+                <th style="padding:8px;text-align:right">P.U. HT</th>
+                <th style="padding:8px;text-align:right">Total HT</th>
+              </tr>
+            </thead>
+            <tbody>${lignesHtml}</tbody>
+          </table>
+        </div>
+
+        <div style="background:#fff;border-radius:8px;padding:16px;margin:16px 0">
+          <div style="display:flex;justify-content:space-between;padding:4px 0"><span style="color:#666">Total HT</span><span>${fmt(ht)} DT</span></div>
+          <div style="display:flex;justify-content:space-between;padding:4px 0"><span style="color:#666">TVA (20%)</span><span>${fmt(tva)} DT</span></div>
+          <div style="display:flex;justify-content:space-between;padding:10px;margin-top:8px;background:#1E3A5F;border-radius:6px">
+            <span style="color:#fff;font-weight:700">TOTAL TTC</span>
+            <span style="color:#48C9B0;font-weight:900;font-size:18px">${fmt(ttc)} DT</span>
+          </div>
+        </div>
+
+        <p style="color:#666;font-size:13px">Mode de paiement : <strong>${d.mode_paiement||'Virement bancaire'}</strong> · Délai : <strong>${d.delai_paiement||'30 jours'}</strong></p>
+        <hr style="border:none;border-top:1px solid #ddd;margin:20px 0">
+        <p style="color:#888;font-size:12px">Cordialement,<br><strong>${d.commercial||APP.name}</strong><br>SalesFlow Pro · contact@salesflowpro.tn</p>
+      </div>
+    </div>`;
+
+  showToast('📧 Envoi en cours…','info');
+  try {
+    const resp = await fetch('/api/send-email', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        to: d.client_email,
+        subject: 'Devis ' + d.ref + ' — SalesFlow Pro',
+        html
+      })
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Erreur envoi');
+    showToast('✅ Devis envoyé par email à ' + d.client_email, 'success');
+  } catch(e) {
+    showToast('❌ Erreur envoi email : ' + e.message, 'error');
+  }
 }
 
 function emailConsult() {
